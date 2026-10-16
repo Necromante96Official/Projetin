@@ -1,0 +1,20 @@
+{
+  "name": "reino-idle",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Reino Idle — jogo idle de gerenciamento medieval (batalhas automáticas, você administra)",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2",
+    "vite": "^5.4.0",
+    "vitest": "^2.1.0"
+  }
+}

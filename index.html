@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#14101c" />
+    <title>Reino Idle — Gerencie, não lute</title>
+    <meta name="description" content="Jogo idle medieval: batalhas automáticas, você só administra o reino." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <div class="bg-decor" aria-hidden="true"></div>
+    <div id="app">
+      <header class="topbar">
+        <div class="brand">
+          <div class="crest">🏰</div>
+          <div>
+            <h1>Reino Idle</h1>
+            <p class="subtitle">As batalhas são automáticas. Você administra.</p>
+          </div>
+        </div>
+        <div class="recursos">
+          <div class="recurso ouro"><span class="rec-icone" data-ic="coin"></span><div><small>Ouro</small><strong id="ouro">0</strong></div></div>
+          <div class="recurso"><span class="rec-icone">📍</span><div><small>Fase</small><strong id="fase">Campo • 1/10</strong></div></div>
+          <div class="recurso"><span class="rec-icone">🏆</span><div><small>Vitórias</small><strong id="vitorias">0</strong></div></div>
+          <div class="recurso"><span class="rec-icone">💀</span><div><small>Derrotas</small><strong id="derrotas">0</strong></div></div>
+        </div>
+        <div class="top-actions">
+          <button id="btn-cronicas" class="btn-ghost">📜 Crônicas<span id="cronicas-dot" class="dot hidden"></span></button>
+          <button id="btn-ajuda" class="btn-ghost">❓ Ajuda</button>
+        </div>
+      </header>
+
+      <main class="layout">
+        <!-- ESQUERDA: herói -->
+        <aside class="coluna coluna-heroi">
+          <section class="card clicavel" id="card-cavaleiro" title="Ver detalhes do cavaleiro">
+            <div class="card-head"><h2>🛡️ Cavaleiro</h2><span class="info-hint">ⓘ</span></div>
+            <div class="cav-nome" id="nome-cavaleiro">Sor Aria • Nv.1</div>
+            <div class="hpbar"><div id="hp-aliado" class="fill aliado"></div><span id="hp-aliado-num" class="hp-num"></span></div>
+            <p id="poder-time" class="stats"></p>
+            <div id="herois" class="herois"></div>
+          </section>
+
+          <section class="card clicavel" id="card-lugar" title="Ver detalhes do lugar">
+            <div class="card-head"><h2>📍 Lugar atual</h2><span class="info-hint">ⓘ</span></div>
+            <div class="cav-nome" id="lugar-nome">Campo Verde</div>
+            <p id="lugar-info" class="stats"></p>
+          </section>
+
+          <section class="card" id="card-previsao">
+            <div class="card-head"><h2><span data-ic="coin"></span> Próxima luta</h2></div>
+            <div id="previsao" class="previsao"></div>
+          </section>
+        </aside>
+
+        <!-- CENTRO: batalha -->
+        <section class="card arena" id="arena">
+          <div class="card-head">
+            <h2><span class="h2-icone" data-ic="swords"></span> Arena <span id="versus-nivel" class="nivel-pill">Nv. 1/10</span></h2>
+            <label class="toggle"><span class="switch"><input type="checkbox" id="auto" checked /><span class="slider"></span></span> Auto</label>
+          </div>
+          <div class="timer-row">
+            <div class="timer-track"><div id="timer-fill" class="timer-fill"></div></div>
+            <small id="timer">preparando horda...</small>
+          </div>
+          <div class="horda-row">
+            <div class="horda-track"><div id="horda-fill" class="horda-fill"></div></div>
+            <small id="horda-txt">—</small>
+          </div>
+          <canvas id="cena" width="480" height="270"></canvas>
+          <div class="bioma-row"><span id="bioma">📍 Campo Verde</span></div>
+          <div id="resultado-flash" class="resultado-flash"></div>
+          <div class="controles-batalha">
+            <button id="lutar-agora" class="btn-primary"><span data-ic="swords"></span> Lutar agora</button>
+            <button id="reset" class="btn-ghost" title="Apagar save">↺ Reset</button>
+          </div>
+          <h3 class="log-titulo">Últimas batalhas</h3>
+          <ul id="mini-log" class="mini-log"></ul>
+        </section>
+
+        <!-- DIREITA: equipamento + skills -->
+        <aside class="coluna coluna-loja">
+          <section class="card" id="card-equip">
+            <div class="card-head"><h2>🛡️ Equipamento</h2></div>
+            <div id="paperdoll" class="paperdoll"></div>
+            <button id="btn-equip" class="btn-primary btn-block">🎒 Equipamentos</button>
+          </section>
+          <section class="card">
+            <button id="btn-skills" class="btn-primary btn-block">✨ Habilidades</button>
+            <p class="hint" style="margin:8px 0 0">Compre peças e skills com ouro. O cavaleiro luta sozinho.</p>
+            <div class="dica">
+              <strong>💡 Estratégia:</strong> perdeu duas seguidas? Priorize <b>Camisa, Calças e Vigor</b>. Ganhando fácil? Invista em <b>Arma e Saque</b>.
+            </div>
+          </section>
+        </aside>
+      </main>
+
+      <footer>
+        <small>🏰 Reino Idle • Save automático • HTML + CSS + Vite + Vitest + TypeScript</small>
+      </footer>
+    </div>
+
+    <!-- Painel flutuante -->
+    <div id="modal-backdrop" class="modal-backdrop hidden">
+      <div class="modal" role="dialog" aria-modal="true">
+        <div class="modal-head">
+          <h3 id="modal-titulo">Detalhes</h3>
+          <button id="modal-fechar" class="btn-ghost">✕</button>
+        </div>
+        <div id="modal-corpo" class="modal-corpo"></div>
+      </div>
+    </div>
+
+    <!-- Log fica fora da vista; Crônicas mostra uma cópia no modal -->
+    <ul id="log" class="log hidden"></ul>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

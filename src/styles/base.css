@@ -1,0 +1,72 @@
+/* base.css — variáveis, reset, fundo. UI 100% pixel: cantos duros,
+   cores chapadas, sombras em bloco (sem blur, sem gradiente suave). */
+
+:root {
+  --bg: #14101c;
+  --card: #211a38;
+  --card-2: #2a2145;
+  --line: #3d3163;
+  --line-hi: #6b5a9e;
+  --ink: #f3e9d2;
+  --muted: #b3a68d;
+  --gold: #e8b34a;
+  --gold-2: #f6d789;
+  --gold-dark: #8a6414;
+  --green: #51cf66;
+  --green-dim: #2b8a3e;
+  --red: #ff6b6b;
+  --red-dim: #a61e4d;
+  --blue: #74c0fc;
+  --radius: 0;
+  --shadow: 4px 4px 0 rgba(0, 0, 0, 0.45);
+  --font-pixel: 'Press Start 2P', monospace;
+  --font-text: 'Inter', system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+.hidden { display: none !important; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  font-family: var(--font-text);
+  background: var(--bg);
+  color: var(--ink);
+  min-height: 100vh;
+  min-height: 100dvh;
+  image-rendering: pixelated;
+}
+
+/* fundo: cor chapada + grade sutil em degraus (faixas duras, sem blur) */
+.bg-decor {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.014) 0 2px, transparent 2px 4px),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.014) 0 2px, transparent 2px 4px),
+    var(--bg);
+}
+
+#app {
+  position: relative;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 14px 16px 8px;
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+h1, h2, h3, .vs-badge, .btn-primary, .btn-buy {
+  font-family: var(--font-pixel);
+}
+
+button { font-family: inherit; cursor: pointer; }
+
+::-webkit-scrollbar { width: 10px; }
+::-webkit-scrollbar-track { background: #100c1e; }
+::-webkit-scrollbar-thumb { background: var(--line); border: 2px solid #100c1e; }
