@@ -14,7 +14,8 @@ export function ouroPorMinuto(state: GameState): number {
 }
 
 export function calcularGanhoOffline(state: GameState, agora: number = Date.now()): GanhoOffline {
-  const segundosFora = Math.floor((agora - (state.updatedAt || agora)) / 1000);
+  const ultimo = Number.isFinite(state.updatedAt) ? state.updatedAt : agora;
+  const segundosFora = Math.max(0, Math.floor((agora - ultimo) / 1000));
   if (segundosFora < OFFLINE_MIN_SEGS) return { segundosFora, ouro: 0 };
   const minutos = Math.min(segundosFora / 60, OFFLINE_MAX_MIN);
   return { segundosFora, ouro: Math.round(ouroPorMinuto(state) * minutos) };

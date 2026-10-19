@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   EQUIPS,
+  MAX_LUGAR,
   MAX_SKILL,
   MAX_TIER,
   ORDEM_SKILLS,
@@ -110,6 +111,60 @@ describe('reino idle — equipamentos + skills', () => {
     expect(calcularGanhoOffline(s).ouro).toBe(0);
     s.updatedAt = Date.now() - 3600 * 1000;
     expect(calcularGanhoOffline(s).ouro).toBeGreaterThan(0);
+  });
+
+  it('offline ignora relógio no futuro (sem ganho retroativo)', () => {
+    const s = criarEstadoInicial();
+    s.updatedAt = Date.now() + 60 * 1000;
+    const g = calcularGanhoOffline(s);
+    expect(g.segundosFora).toBe(0);
+    expect(g.ouro).toBe(0);
+  });
+
+  it('saneia save corrompido: ouro, lugar, relógio, equip e stats', () => {
+    const agora = Date.now();
+    const s = migrarSave({
+      ouro: -50,
+      lugar: 1e9,
+      nivel: 999,
+      updatedAt: agora + 60 * 1000,
+      cavaleiro: { nome: '', atk: -5, hp: Number.NaN },
+      equip: { arma: 99999, elmo: -3 },
+      skills: { afiado: 99999, vigor: Number.NaN },
+    });
+    expect(s.ouro).toBe(0);
+    expect(s.lugar).toBe(MAX_LUGAR);
+    expect(s.nivel).toBe(10);
+    expect(s.updatedAt).toBeLessThanOrEqual(agora);
+    expect(s.cavaleiro.atk).toBe(1);
+    expect(s.cavaleiro.hp).toBe(100);
+    expect(s.equip.arma).toBe(MAX_TIER);
+    expect(s.equip.elmo).toBe(0);
+    expect(s.skills.afiado).toBe(MAX_SKILL);
+    expect(s.skills.vigor).toBe(0);
+  });
+
+  it('limita números gigantes mas finitos do save (sem Infinity no combate)', () => {
+    const s = migrarSave({
+      ouro: Number.MAX_VALUE,
+      vitorias: Number.MAX_VALUE,
+      abates: Number.MAX_VALUE,
+      cavaleiro: { atk: Number.MAX_VALUE, hp: Number.MAX_VALUE },
+    });
+    for (const n of [s.ouro, s.vitorias, s.abates, s.cavaleiro.atk, s.cavaleiro.hp]) {
+      expect(Number.isFinite(n)).toBe(true);
+      expect(n).toBeLessThanOrEqual(Number.MAX_SAFE_INTEGER);
+    }
+    const p = parametrosCombate(s);
+    expect(Number.isFinite(p.atk)).toBe(true);
+    expect(Number.isFinite(p.hp)).toBe(true);
+  });
+
+  it('não passa do último lugar no avanço de nível', () => {
+    const s = { ...criarEstadoInicial(), lugar: MAX_LUGAR, nivel: 10 };
+    const av = avancarNivel(s);
+    expect(s.lugar).toBe(MAX_LUGAR);
+    expect(av.subiuLugar).toBe(false);
   });
 
   it('todas as peças e skills têm definição válida', () => {

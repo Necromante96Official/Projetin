@@ -8,7 +8,7 @@
     <meta name="description" content="Jogo idle medieval: batalhas automáticas, você só administra o reino." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Manrope:wght@400;500;600;700;800&family=Press+Start+2P&display=swap" rel="stylesheet" />
   </head>
   <body>
     <div class="bg-decor" aria-hidden="true"></div>
@@ -36,7 +36,7 @@
       <main class="layout">
         <!-- ESQUERDA: herói -->
         <aside class="coluna coluna-heroi">
-          <section class="card clicavel" id="card-cavaleiro" title="Ver detalhes do cavaleiro">
+          <section class="card clicavel" id="card-cavaleiro" title="Ver detalhes do cavaleiro" role="button" tabindex="0">
             <div class="card-head"><h2>🛡️ Cavaleiro</h2><span class="info-hint">ⓘ</span></div>
             <div class="cav-nome" id="nome-cavaleiro">Sor Aria • Nv.1</div>
             <div class="hpbar"><div id="hp-aliado" class="fill aliado"></div><span id="hp-aliado-num" class="hp-num"></span></div>
@@ -44,7 +44,7 @@
             <div id="herois" class="herois"></div>
           </section>
 
-          <section class="card clicavel" id="card-lugar" title="Ver detalhes do lugar">
+          <section class="card clicavel" id="card-lugar" title="Ver detalhes do lugar" role="button" tabindex="0">
             <div class="card-head"><h2>📍 Lugar atual</h2><span class="info-hint">ⓘ</span></div>
             <div class="cav-nome" id="lugar-nome">Campo Verde</div>
             <p id="lugar-info" class="stats"></p>
@@ -105,10 +105,10 @@
 
     <!-- Painel flutuante -->
     <div id="modal-backdrop" class="modal-backdrop hidden">
-      <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-titulo">
         <div class="modal-head">
           <h3 id="modal-titulo">Detalhes</h3>
-          <button id="modal-fechar" class="btn-ghost">✕</button>
+          <button id="modal-fechar" class="btn-ghost" aria-label="Fechar">✕</button>
         </div>
         <div id="modal-corpo" class="modal-corpo"></div>
       </div>

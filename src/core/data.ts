@@ -45,7 +45,13 @@ export const REGRAS: Readonly<RegrasCombate> = {
   alcanceInimigo: 52,
   spawnCd: 0.4,
   velBase: 55,
+  distSpawn: 290,
+  cdInicialJogador: 0.4,
+  cdInicialInimigo: 0.6,
 };
+
+/** Teto defensivo do lugar absoluto: evita Infinity em Math.pow com save absurdo. */
+export const MAX_LUGAR = 999;
 
 // --- Equipamentos: tier 0 = inicial (de graça), tiers 1..3 compráveis ---
 export const EQUIPS: Readonly<Record<EquipSlot, EquipDef>> = {

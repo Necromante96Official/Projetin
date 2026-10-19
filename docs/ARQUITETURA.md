@@ -87,7 +87,7 @@ core  →  nada (puro)
 ```bash
 npm install
 npm run dev        # jogo com HMR
-npm test           # vitest (16 testes)
+npm test           # vitest (20 testes)
 npm run typecheck  # tsc --noEmit
 npm run build      # typecheck + bundle p/ dist/ (GitHub Pages)
 ```

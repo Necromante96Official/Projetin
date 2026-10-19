@@ -45,7 +45,7 @@ TypeScript estrito + HTML + CSS + Vite + Vitest (zero framework, fácil de mante
 ```bash
 npm install
 npm run dev        # jogo com HMR
-npm test           # 16 testes (regras + paleta)
+npm test           # 20 testes (regras + paleta)
 npm run typecheck  # tsc --noEmit
 npm run build      # typecheck + bundle p/ dist/
 ```

@@ -8,7 +8,6 @@ import { el } from './dom.js';
 export type LogTipo = 'buy' | 'win' | 'loss' | 'info' | '';
 
 export class LogStore {
-  private novas = 0;
   private flashTimer: number | undefined;
   /** chamado quando chega log com as Crônicas abertas (p/ atualizar o modal). */
   onCronicasAberta: (() => void) | null = null;
@@ -34,7 +33,6 @@ export class LogStore {
       while (mini.children.length > 4) mini.lastChild?.remove();
     }
     if (this.modal.chave !== 'cronicas') {
-      this.novas++;
       el('cronicas-dot').classList.remove('hidden');
     } else {
       this.onCronicasAberta?.();
@@ -55,12 +53,13 @@ export class LogStore {
     if (ul) ul.innerHTML = '';
     const mini = document.getElementById('mini-log');
     if (mini) mini.innerHTML = '';
-    this.novas = 0;
+    window.clearTimeout(this.flashTimer);
+    this.flashTimer = undefined;
+    document.getElementById('resultado-flash')?.classList.remove('visivel');
     el('cronicas-dot').classList.add('hidden');
   }
 
   marcarLidas(): void {
-    this.novas = 0;
     el('cronicas-dot').classList.add('hidden');
   }
 }

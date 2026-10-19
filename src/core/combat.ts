@@ -2,7 +2,7 @@
 // Determinístico e puro: mesma entrada => mesma saída (testado em test/).
 
 import { EQUIPS, ORDEM_SLOTS, REGRAS, SKILL_MULT } from './data.js';
-import type { CombatParams, GameState } from './types.js';
+import type { CombatParams, GameState, SkillId } from './types.js';
 
 // Soma tudo: base + equipamentos, depois % das skills.
 export function parametrosCombate(state: GameState): CombatParams {
@@ -14,22 +14,22 @@ export function parametrosCombate(state: GameState): CombatParams {
     eqAtk += t.atk;
     eqHp += t.hp;
   }
-  const sk = state.skills;
+  const nv = (id: SkillId): number => state.skills[id] ?? 0;
   const atk = Math.round(
-    (state.cavaleiro.atk + eqAtk) * (1 + SKILL_MULT.afiadoPorNv * sk.afiado),
+    (state.cavaleiro.atk + eqAtk) * (1 + SKILL_MULT.afiadoPorNv * nv('afiado')),
   );
   const hp = Math.round(
-    (state.cavaleiro.hp + eqHp) * (1 + SKILL_MULT.vigorPorNv * sk.vigor),
+    (state.cavaleiro.hp + eqHp) * (1 + SKILL_MULT.vigorPorNv * nv('vigor')),
   );
   return {
     atk: Math.max(1, atk),
     hp: Math.max(1, hp),
     intervalo: Math.max(
       SKILL_MULT.intervaloMinimo,
-      REGRAS.intervaloBase * (1 - SKILL_MULT.rapidezPorNv * sk.rapidez),
+      REGRAS.intervaloBase * (1 - SKILL_MULT.rapidezPorNv * nv('rapidez')),
     ),
-    regen: SKILL_MULT.regenPorNv * sk.regen,
-    ouroMult: 1 + SKILL_MULT.saquePorNv * sk.saque,
+    regen: SKILL_MULT.regenPorNv * nv('regen'),
+    ouroMult: 1 + SKILL_MULT.saquePorNv * nv('saque'),
   };
 }
 

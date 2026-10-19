@@ -2,6 +2,7 @@
 // montanhas em degraus, pinheiros em blocos, nuvens em blocos.
 // Guia: docs/sprites-referencia.md §5. Paleta: render/palette.ts.
 
+import { LUGARES } from '../core/data.js';
 import type { BiomaId } from '../core/types.js';
 import {
   W,
@@ -14,6 +15,7 @@ import {
   pixelCirculo,
   piramide,
   elipsePontos,
+  elipsePixel,
   ditherLinha,
   type Ctx2D,
 } from '../render/pixel.js';
@@ -94,7 +96,7 @@ const BIOMAS: Record<BiomaId, BiomaBase> = {
 };
 
 export function biomaPorLugar(lugarAbs: number, biomaId: BiomaId): Bioma {
-  const volta = Math.floor(lugarAbs / 2) + 1;
+  const volta = Math.floor(lugarAbs / Math.max(1, LUGARES.length)) + 1;
   return { ...BIOMAS[biomaId], volta };
 }
 
@@ -104,6 +106,126 @@ function semente(n: number): () => number {
     s = (s * 9301 + 49297) % 233280;
     return s / 233280;
   };
+}
+
+// Pirâmide invertida (estalactites da caverna).
+function piramideBaixo(
+  ctx: Ctx2D,
+  cx: number,
+  topoY: number,
+  w: number,
+  h: number,
+  cor: string,
+): void {
+  const degraus = Math.max(2, Math.round(h / 4));
+  for (let i = 0; i < degraus; i++) {
+    const k = i / degraus;
+    const ww = Math.max(2, w * (1 - k));
+    R(ctx, cx - ww / 2, topoY + (i * h) / degraus, ww, h / degraus + 0.7, cor);
+  }
+}
+
+// Camada intermediária: dá profundidade entre a cordilheira e a arena.
+function desenharMeio(ctx: Ctx2D, B: Bioma, nivelSeed: number, t: number): void {
+  const r = semente(nivelSeed * 43 + 17);
+
+  if (B.part === 'brasas') {
+    // teto rochoso com estalactites e veios de brasa ao fundo
+    for (let x = -10; x < W + 24; ) {
+      const w = 12 + r() * 26;
+      const h = 22 + r() * 52;
+      piramideBaixo(ctx, x + w / 2, -2, w, h, '#1c121e');
+      if (r() > 0.72) R(ctx, x + w / 2 - 1, h - 8, 2, 4, '#b8462b');
+      x += 26 + r() * 38;
+    }
+    for (let i = 0; i < 8; i++) {
+      const lx = Math.round(r() * W);
+      const ly = CHAO_Y - 4 - Math.round(r() * 10);
+      R(ctx, lx, ly, 8 + Math.round(r() * 12), 2, '#5c2a2a');
+      if (r() > 0.5) R(ctx, lx + 3, ly - 1, 4, 1, '#ff922b');
+    }
+    return;
+  }
+
+  if (B.part === 'cinzas') {
+    // castelo distante: muralha, torres e janelas acesas
+    const base = CHAO_Y + 2;
+    ctx.globalAlpha = 0.6;
+    R(ctx, -10, base - 24, W + 20, 24, '#231b3c');
+    for (const [tx, tw, th] of [
+      [36, 18, 58],
+      [150, 24, 76],
+      [316, 20, 62],
+      [426, 26, 86],
+    ] as const) {
+      R(ctx, tx, base - th, tw, th, '#2a2047');
+      R(ctx, tx, base - th, 2, th, '#3a2d5e');
+      for (let c = 0; c < tw; c += 6) R(ctx, tx + c, base - th - 4, 3, 4, '#2a2047');
+      const janela = Math.sin(t * 2 + tx) > -0.4;
+      if (janela) {
+        R(ctx, tx + tw / 2 - 2, base - th + 16, 4, 5, '#e8b34a');
+        R(ctx, tx + tw / 2 - 1, base - th + 17, 2, 2, '#fff3bf');
+      }
+      if (r() > 0.5) R(ctx, tx + tw / 2 - 3, base - th + 32, 6, 4, '#e8b34a');
+    }
+    // ponte levadiça + névoa na base
+    R(ctx, W / 2 - 26, base - 18, 52, 18, '#1c1631');
+    for (let x = 0; x < W; x += 4) R(ctx, x, base - 6, 2, 2, 'rgba(233,236,245,0.12)');
+    ctx.globalAlpha = 1;
+    return;
+  }
+
+  // colinas suaves no horizonte (campo, floresta e neve)
+  const corColina =
+    B.part === 'neve'
+      ? '#a9bfcf'
+      : B.part === 'vagalumes'
+        ? '#173a2d'
+        : mistura(B.chaoA, '#101a14', 0.28);
+  const corLuz = mistura(corColina, '#ffffff', 0.18);
+  for (let i = 0; i < 6; i++) {
+    const cx = i * 100 + 20 + r() * 40;
+    const rx = 62 + r() * 54;
+    const ry = 18 + r() * 22;
+    elipsePixel(ctx, cx, CHAO_Y + 10, rx, ry, corColina, 0.95);
+    elipsePixel(ctx, cx - rx * 0.2, CHAO_Y + 10 - ry * 0.42, rx * 0.55, ry * 0.28, corLuz, 0.5);
+  }
+
+  if (B.part === 'folhas') {
+    // vilarejo distante: telhados, paredes e janelas quentes
+    const base = CHAO_Y + 2;
+    for (let i = 0; i < 4; i++) {
+      const hx = 42 + i * 104 + Math.round(r() * 28);
+      const hw = 18 + Math.round(r() * 8);
+      const hh = 10 + Math.round(r() * 5);
+      R(ctx, hx, base - hh, hw, hh, '#6b5a48');
+      R(ctx, hx, base - hh, hw, 2, '#8a7a5c');
+      piramide(ctx, hx + hw / 2, base - hh + 1, hw + 8, 9, '#7a4030');
+      R(ctx, hx + Math.round(hw * 0.3), base - hh + 4, 3, 3, '#ffd43b');
+      R(ctx, hx + Math.round(hw * 0.3), base - hh + 4, 1, 1, '#fff3bf');
+      R(ctx, hx + hw - 5, base - hh - 6, 2, 6, '#4a3826');
+    }
+  } else if (B.part === 'vagalumes') {
+    // linha de árvores densa, com neblina entre os troncos
+    for (let x = -8; x < W + 16; ) {
+      const w = 18 + r() * 18;
+      const h = 30 + r() * 34;
+      piramide(ctx, x + w / 2, CHAO_Y + 2, w, h, '#0f2a20');
+      R(ctx, x + w / 2 - 1, CHAO_Y - h * 0.45, 2, h * 0.45, '#0a1d16');
+      x += 16 + r() * 18;
+    }
+    for (let x = 0; x < W; x += 4) R(ctx, x, CHAO_Y - 6, 2, 2, 'rgba(209,241,220,0.09)');
+  } else if (B.part === 'neve') {
+    // pinheiros nevados ao fundo
+    for (let x = -4; x < W + 12; ) {
+      const w = 20 + r() * 16;
+      const h = 26 + r() * 34;
+      piramide(ctx, x + w / 2, CHAO_Y + 2, w, h, '#416b5a');
+      R(ctx, x + w / 2 - w * 0.3, CHAO_Y - h * 0.7, w * 0.6, 2, '#e9f1f5');
+      R(ctx, x + w / 2 - w * 0.2, CHAO_Y - h * 0.42, w * 0.4, 2, '#e9f1f5');
+      x += 22 + r() * 20;
+    }
+  }
 }
 
 export function desenharCenario(
@@ -139,12 +261,39 @@ export function desenharCenario(
       R(ctx, 408 + 16, 44 - 2, 3, 4, '#fff3bf');
     }
   } else if (B.astro === 'lua') {
+    pixelCirculo(ctx, 408, 44, 19, '#e9ecf5', 0.14);
     pixelCirculo(ctx, 408, 44, 15, '#e9ecf5', 0.3);
     pixelCirculo(ctx, 408, 44, 12, '#e9ecf5', 1);
     pixelCirculo(ctx, 413, 40, 10, B.ceu[0], 1); // mordida do crescente
+    // crateras em pixel
+    R(ctx, 402, 40, 3, 2, '#c5cada');
+    R(ctx, 405, 47, 2, 2, '#c5cada');
+    R(ctx, 408, 43, 2, 1, '#d6dbe8');
+    // estrelas cintilantes
     const rnd = semente(7);
-    ctx.fillStyle = 'rgba(255,255,255,0.8)';
-    for (let i = 0; i < 26; i++) ctx.fillRect(Math.floor(rnd() * W), Math.floor(rnd() * 120), 2, 2);
+    for (let i = 0; i < 34; i++) {
+      const sx = Math.floor(rnd() * W);
+      const sy = Math.floor(rnd() * 130);
+      const s = rnd() > 0.85 ? 2 : 1;
+      const brilho = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(t * 1.7 + i * 1.9));
+      ctx.globalAlpha = brilho;
+      ctx.fillStyle = i % 5 === 0 ? '#fff3bf' : '#e9ecf5';
+      ctx.fillRect(sx, sy, s, s);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // raios de luz em degraus (dão atmosfera sem perder o pixel)
+  if (B.astro === 'sol') {
+    ctx.globalAlpha = 0.055 + Math.sin(t * 0.6) * 0.012;
+    const deriva = (t * 7) % 140;
+    for (let i = -1; i < 5; i++) {
+      const bx = i * 140 - deriva;
+      for (let y = 58; y < CHAO_Y; y += 10) {
+        R(ctx, bx + (y - 58) * 0.42, y, 34, 5, '#fff3bf');
+      }
+    }
+    ctx.globalAlpha = 1;
   }
 
   // pássaros (só de dia)
@@ -190,26 +339,37 @@ export function desenharCenario(
     }
   }
 
-  // cordilheira distante em degraus + neve + luz lateral (esq clara, dir sombra)
+  // cordilheira distante em degraus + perspectiva atmosférica + luz lateral
   const rnd = semente(nivelSeed * 13 + 5);
   ctx.globalAlpha = 0.85;
+  const corMontanha = mistura(B.longe, B.ceu[1], 0.24);
   let x = -20;
   while (x < W + 20) {
     const w = 60 + rnd() * 80;
     const h = 40 + rnd() * 60;
     const cxm = x + w / 2;
-    piramide(ctx, cxm, CHAO_Y, w, h, B.longe);
+    piramide(ctx, cxm, CHAO_Y, w, h, corMontanha);
     // face iluminada (esquerda) e sombra (direita)
-    R(ctx, cxm - w / 2, CHAO_Y - h * 0.7, 4, h * 0.7, mistura(B.longe, '#ffffff', 0.22));
-    R(ctx, cxm + w / 2 - 5, CHAO_Y - h * 0.85, 5, h * 0.85, mistura(B.longe, '#101a14', 0.35));
-    // capacete de neve no pico
-    const nw = Math.max(8, w * 0.22);
-    R(ctx, cxm - nw / 2, CHAO_Y - h, nw, 4, '#e9f1f5');
-    R(ctx, cxm - nw * 0.32, CHAO_Y - h + 4, nw * 0.64, 3, '#ffffff');
-    R(ctx, cxm - nw * 0.2, CHAO_Y - h + 7, nw * 0.4, 2, '#cfe0ea');
+    R(ctx, cxm - w / 2, CHAO_Y - h * 0.7, 4, h * 0.7, mistura(corMontanha, '#ffffff', 0.22));
+    R(ctx, cxm + w / 2 - 5, CHAO_Y - h * 0.85, 5, h * 0.85, mistura(corMontanha, '#101a14', 0.35));
+    if (B.part === 'neve' || B.part === 'folhas') {
+      // capacete de neve no pico
+      const nw = Math.max(8, w * 0.22);
+      R(ctx, cxm - nw / 2, CHAO_Y - h, nw, 4, '#e9f1f5');
+      R(ctx, cxm - nw * 0.32, CHAO_Y - h + 4, nw * 0.64, 3, '#ffffff');
+      R(ctx, cxm - nw * 0.2, CHAO_Y - h + 7, nw * 0.4, 2, '#cfe0ea');
+    } else if (B.part !== 'brasas') {
+      // bruma no cume (sem neve em campo/castelo)
+      const nw = Math.max(8, w * 0.24);
+      R(ctx, cxm - nw / 2, CHAO_Y - h, nw, 2, mistura(corMontanha, '#ffffff', 0.42));
+      R(ctx, cxm - nw * 0.3, CHAO_Y - h + 2, nw * 0.6, 2, mistura(corMontanha, '#ffffff', 0.26));
+    }
     x += w * 0.6;
   }
   ctx.globalAlpha = 1;
+
+  // camada intermediária (profundidade entre montanha e arena)
+  desenharMeio(ctx, B, nivelSeed, t);
 
   // camada próxima conforme o clima (tudo em blocos)
   const r2 = semente(nivelSeed * 77 + 3);
@@ -260,8 +420,13 @@ export function desenharCenario(
     px += 34 + r2() * 46;
   }
 
-  // dithering no horizonte
+  // dithering no horizonte + névoa baixa
   ditherLinha(ctx, CHAO_Y - 2, B.ceu[1]);
+  ctx.globalAlpha = 0.16;
+  ditherLinha(ctx, CHAO_Y - 7, mistura(B.ceu[1], '#ffffff', 0.35), 4, 2);
+  ctx.globalAlpha = 0.1;
+  ditherLinha(ctx, CHAO_Y - 11, mistura(B.ceu[1], '#ffffff', 0.5), 6, 1);
+  ctx.globalAlpha = 1;
 
   // chão em faixas duras + faixa de luz no topo + textura de terra
   R(ctx, 0, CHAO_Y, W, H - CHAO_Y, B.chaoA);
@@ -326,19 +491,38 @@ export function desenharCenario(
     }
   }
 
-  // círculo da arena em pontos
-  elipsePontos(ctx, PX, CHAO_Y + 26, 110, 17, 'rgba(255,255,255,0.35)');
+  // anel da arena: pontilhado interno + pedras na borda frontal
+  elipsePontos(ctx, PX, CHAO_Y + 26, 112, 18, 'rgba(255,255,255,0.1)', 5, 2);
+  elipsePontos(ctx, PX, CHAO_Y + 26, 104, 16, 'rgba(255,255,255,0.3)', 9, 1);
+  const pedra = mistura(B.chaoB, '#ffffff', 0.22);
+  const pedraLuz = mistura(pedra, '#ffffff', 0.4);
+  const pedraSombra = mistura(B.chaoB, '#000000', 0.32);
+  for (let a = 6; a < 180; a += 7) {
+    const rad = (a * Math.PI) / 180;
+    const sx = Math.round(PX + Math.cos(rad) * 118);
+    const sy = Math.round(CHAO_Y + 26 + Math.sin(rad) * 20);
+    if (Math.abs(sx - PX) < 22) continue;
+    R(ctx, sx - 3, sy - 1, 7, 3, pedraSombra);
+    R(ctx, sx - 3, sy - 2, 6, 2, pedra);
+    R(ctx, sx - 3, sy - 2, 4, 1, pedraLuz);
+  }
 
-  // tochas: poste com anéis + copo + chama 3 tons + faíscas (sem caixas de glow)
+  // tochas: base de pedra, poça de luz, chama em 4 tons, fumaça e faíscas
   for (const tx of [30, W - 30]) {
-    R(ctx, tx - 2, CHAO_Y - 34, 4, 36, '#5c4a2f');
-    R(ctx, tx - 2, CHAO_Y - 34, 1, 36, '#7a6238'); // luz lateral
-    R(ctx, tx - 2, CHAO_Y - 22, 4, 2, '#3a2f1e'); // anéis
+    const tremula = Math.sin(t * 13 + tx) * 1.5;
+    // sombra + base + poste com luz lateral e anéis
+    elipsePixel(ctx, tx + 3, CHAO_Y + 31, 16, 4, '#000', 0.22);
+    R(ctx, tx - 5, CHAO_Y + 26, 10, 3, '#4a3826');
+    R(ctx, tx - 5, CHAO_Y + 26, 10, 1, '#6b5433');
+    R(ctx, tx - 2, CHAO_Y - 34, 4, 60, '#5c4a2f');
+    R(ctx, tx - 2, CHAO_Y - 34, 1, 60, '#7a6238');
+    R(ctx, tx - 2, CHAO_Y - 22, 4, 2, '#3a2f1e');
     R(ctx, tx - 2, CHAO_Y - 12, 4, 2, '#3a2f1e');
     R(ctx, tx - 4, CHAO_Y - 38, 8, 5, '#3a2f1e');
     R(ctx, tx - 4, CHAO_Y - 38, 8, 1, '#6b5a48');
-    const f = Math.round(Math.sin(t * 13 + tx) * 1.5);
-    const fy = CHAO_Y - 50 + f;
+    // poça de luz no chão (dither de baixa opacidade)
+    elipsePixel(ctx, tx, CHAO_Y + 32, 26, 7, '#ffb35c', 0.09 + Math.abs(Math.sin(t * 6 + tx)) * 0.03);
+    const fy = CHAO_Y - 50 + Math.round(tremula);
     // brasa + chama externa/meio/núcleo
     R(ctx, tx - 3, fy + 10, 6, 2, '#e03131');
     R(ctx, tx - 4, fy, 8, 11, '#ff922b');
@@ -346,10 +530,18 @@ export function desenharCenario(
     R(ctx, tx - 2, fy + 2, 4, 8, '#ffd43b');
     R(ctx, tx - 1, fy + 4, 2, 5, '#fff3bf');
     // lingueta da chama + faíscas que sobem
-    R(ctx, tx - 1, fy - 3 + f, 2, 3, '#ff922b');
+    R(ctx, tx - 1, fy - 3 + Math.round(tremula), 2, 3, '#ff922b');
     const sp = Math.sin(t * 9 + tx * 2) > 0.4;
     if (sp) R(ctx, tx + 3, fy - 8, 2, 2, '#ffd43b');
     if (Math.cos(t * 7 + tx) > 0.6) R(ctx, tx - 5, fy - 5, 1, 2, '#ff922b');
+    // fumaça fina subindo
+    for (let i = 0; i < 3; i++) {
+      const sy = fy - 12 - i * 7 - Math.round((t * 6 + i * 9 + tx) % 9);
+      const sx = tx + Math.round(Math.sin(t * 1.4 + i * 2 + tx) * (2 + i * 1.3));
+      ctx.globalAlpha = 0.16 - i * 0.04;
+      R(ctx, sx, sy, 2, 2, '#b9b0c6');
+      ctx.globalAlpha = 1;
+    }
     // halo pontilhado ao redor (dither, sem caixas)
     ctx.fillStyle = '#ffb35c';
     const haloR = 13;
@@ -367,6 +559,57 @@ export function desenharCenario(
     ctx.globalAlpha = Math.min(0.14, 0.05 * volta);
     R(ctx, 0, 0, W, H, '#780a28');
     ctx.globalAlpha = 1;
+  }
+}
+
+// Primeiro plano: tufos altos nas quinas, pedras e brasas. Desenhado
+// depois dos lutadores para criar profundidade e enquadrar a arena.
+export function desenharPrimeiroPlano(ctx: Ctx2D, B: Bioma, t: number): void {
+  const claro =
+    B.part === 'neve'
+      ? '#dbe7ee'
+      : B.part === 'brasas'
+        ? '#2a1b26'
+        : B.part === 'cinzas'
+          ? '#211a36'
+          : B.part === 'vagalumes'
+            ? '#0c241a'
+            : '#1f4a2c';
+  const escuro = mistura(claro, '#000000', 0.4);
+  const luz = mistura(claro, '#ffffff', 0.22);
+  const balanco = (s: number): number => Math.round(Math.sin(t * 1.7 + s) * 1.6);
+  const grupos = B.part === 'neve' ? 5 : 7;
+
+  for (const lado of [-1, 1] as const) {
+    for (let i = 0; i < grupos; i++) {
+      const baseX = lado < 0 ? 6 + i * 8 : W - 7 - i * 8;
+      const altura = 14 + ((i * 5) % 13);
+      const b = balanco(i + (lado < 0 ? 0 : 9));
+      R(ctx, baseX, H - altura, 2, altura, escuro);
+      R(ctx, baseX + (b > 0 ? 1 : 0), H - altura - 3, 1, 4, claro);
+      R(ctx, baseX + 2, H - Math.round(altura * 0.7), 2, Math.round(altura * 0.7), claro);
+      R(ctx, baseX + 3 + b, H - Math.round(altura * 0.9), 1, 5, claro);
+      R(ctx, baseX + 2, H - 2, 1, 2, luz);
+    }
+    const rx = lado < 0 ? 4 : W - 22;
+    R(ctx, rx, H - 7, 18, 5, escuro);
+    R(ctx, rx + 2, H - 8, 12, 2, luz);
+    R(ctx, rx + 3, H - 9, 7, 1, mistura(claro, '#ffffff', 0.4));
+  }
+
+  for (let x = 0; x < 46; x += 4) {
+    R(ctx, x, H - 2, 2, 2, 'rgba(0,0,0,0.28)');
+    R(ctx, W - x - 2, H - 2, 2, 2, 'rgba(0,0,0,0.28)');
+  }
+
+  if (B.part === 'brasas') {
+    for (let i = 0; i < 5; i++) {
+      const x = 18 + i * 14;
+      const y = H - 12;
+      R(ctx, x, y, 3, 12, '#3a2430');
+      R(ctx, x, y, 1, 10, '#ff922b');
+      R(ctx, x + 1, y + 1, 1, 6, '#ffd43b');
+    }
   }
 }
 

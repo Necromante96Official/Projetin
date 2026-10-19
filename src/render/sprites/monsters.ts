@@ -221,8 +221,14 @@ export function desenharMonstro(ctx: Ctx2D, tipo: number, o: OptsMonstro): void 
     }
 
     if (flash > 0) {
-      ctx.globalAlpha = Math.min(0.32, flash * 0.4);
-      R(ctx, xx - 6 * u, peY - h - 6 * u, 12 * u, h + 7 * u, '#ffffff');
+      // brilho de impacto no contorno (sem caixa branca)
+      ctx.globalAlpha = Math.min(0.75, flash * 0.9);
+      const topo = T.extra === 'lobo' ? peY - 11 * u : peY - h - 5 * u;
+      R(ctx, xx - 2 * u, topo, 4 * u, 0.8 * u, '#ffffff');
+      R(ctx, xx - 5 * u, peY - h * 0.7 + bob, 0.8 * u, 2 * u, '#ffffff');
+      R(ctx, xx + 4.4 * u, peY - h * 0.55 + bob, 0.7 * u, 2.2 * u, '#ffffff');
+      R(ctx, xx - 1 * u, peY - 1.8 * u, 1.2 * u, 0.7 * u, '#ffffff');
+      ctx.globalAlpha = 1;
     }
     ctx.restore();
   });

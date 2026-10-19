@@ -9,7 +9,11 @@ export function carregar(): GameState {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return criarEstadoInicial();
-    return migrarSave({ ...criarEstadoInicial(), ...(JSON.parse(raw) as SaveCru) });
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return criarEstadoInicial();
+    }
+    return migrarSave(parsed as SaveCru);
   } catch {
     return criarEstadoInicial();
   }
@@ -17,6 +21,8 @@ export function carregar(): GameState {
 
 export function salvar(state: GameState): void {
   try {
+    // Marca o instante real do save: é a base do ganho offline (evita farmar reload).
+    state.updatedAt = Date.now();
     localStorage.setItem(SAVE_KEY, JSON.stringify(state));
   } catch {
     /* armazenamento cheio/bloqueado: segue sem save */

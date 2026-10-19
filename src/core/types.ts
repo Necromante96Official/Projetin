@@ -39,6 +39,12 @@ export interface RegrasCombate {
   alcanceInimigo: number;
   spawnCd: number;
   velBase: number;
+  /** distância (px) do spawn em relação ao cavaleiro */
+  distSpawn: number;
+  /** cooldown inicial do cavaleiro (s) */
+  cdInicialJogador: number;
+  /** cooldown inicial do inimigo ao entrar em alcance (s) */
+  cdInicialInimigo: number;
 }
 
 export interface Cavaleiro {

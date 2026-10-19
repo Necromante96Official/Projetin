@@ -5,6 +5,20 @@
 import { R, shade, V, comDir, elipsePixel, type Ctx2D } from '../pixel.js';
 import type { OptsCavaleiro } from './shared.js';
 
+// Contorno com cantos chanfrados: evita a "caixa" quadrada atrás do corpo.
+function silhueta(
+  ctx: Ctx2D,
+  cx: number,
+  topo: number,
+  w: number,
+  h: number,
+  cor: string,
+  r: number,
+): void {
+  R(ctx, cx - w / 2 + r, topo, w - r * 2, h, cor);
+  R(ctx, cx - w / 2, topo + r, w, h - r * 2, cor);
+}
+
 export function desenharCavaleiro(ctx: Ctx2D, o: OptsCavaleiro): void {
   const { x, peY, s, t, lunge, swing, flash, caido, dir, equip } = o;
   const eq = equip;
@@ -23,6 +37,19 @@ export function desenharCavaleiro(ctx: Ctx2D, o: OptsCavaleiro): void {
 
     ctx.save();
     if (caido) ctx.globalAlpha = 0.55;
+
+    // ---- capa curta: assinatura visual do herói ----
+    {
+      const onda = caido ? 0 : Math.sin(t * 2.6) * 0.8;
+      R(ctx, xx - 6.4 * u, peY - 12.4 * u + bob, 2.6 * u, 7.2 * u, C('#6b1731'));
+      R(ctx, xx - 7 * u + onda, peY - 11.6 * u + bob, 2.2 * u, 6.4 * u, C('#a61e4d'));
+      R(ctx, xx - 7 * u + onda, peY - 11.6 * u + bob, 2.2 * u, 1 * u, C('#ff8787'));
+      R(ctx, xx - 7.2 * u + onda, peY - 5.6 * u + bob, 1.8 * u, 1.4 * u, C('#a61e4d'));
+      R(ctx, xx - 6.8 * u, peY - 5.2 * u + bob, 1.4 * u, 1.2 * u, C('#6b1731'));
+      // fecho dourado no ombro
+      R(ctx, xx - 5.6 * u, peY - 11.9 * u + bob, 1.1 * u, 1.1 * u, C('#e8b34a'));
+      R(ctx, xx - 5.3 * u, peY - 11.6 * u + bob, 0.5 * u, 0.5 * u, C('#8a6414'));
+    }
 
     // ---- pernas conforme a calça ----
     const tCal = eq.calcas || 0;
@@ -70,8 +97,8 @@ export function desenharCavaleiro(ctx: Ctx2D, o: OptsCavaleiro): void {
     }
     // ---- torso conforme a camisa ----
     const tCam = eq.camisa || 0;
-    R(ctx, xx - 4.6 * u, peY - 11.6 * u + bob, 9.2 * u, 8.2 * u, '#1c2333');
-    R(ctx, xx - 4.6 * u, peY - 11.6 * u + bob, 9.2 * u, 1, shade('#8fa3bd', 1.25)); // sel-out
+    silhueta(ctx, xx, peY - 11.6 * u + bob, 9.2 * u, 8.2 * u, '#1c2333', 0.9 * u);
+    R(ctx, xx - 3.7 * u, peY - 11.6 * u + bob, 7.4 * u, 1, shade('#8fa3bd', 1.25)); // sel-out
     if (tCam === 0) {
       V(ctx, xx - 4 * u, peY - 11 * u + bob, 8 * u, 7 * u, C(PELE));
       // peitoral: sombra sob os músculos + linha central
@@ -85,6 +112,15 @@ export function desenharCavaleiro(ctx: Ctx2D, o: OptsCavaleiro): void {
       // lateral do corpo (luz do topo: sombra à direita)
       R(ctx, xx + 2.8 * u, peY - 10.6 * u + bob, 1.2 * u, 6.2 * u, C(PELE_SOMBRA));
       R(ctx, xx - 4 * u, peY - 10.6 * u + bob, 0.7 * u, 6.2 * u, C('#f7d9a8'));
+      // alça de couro diagonal: tira o aspecto de "boneco" do peito nu
+      R(ctx, xx - 4 * u, peY - 10.5 * u + bob, 1.5 * u, 1 * u, C('#6b4a2f'));
+      R(ctx, xx - 2.7 * u, peY - 9.8 * u + bob, 1.7 * u, 1 * u, C('#6b4a2f'));
+      R(ctx, xx - 1.2 * u, peY - 9.1 * u + bob, 1.8 * u, 1 * u, C('#6b4a2f'));
+      R(ctx, xx + 0.4 * u, peY - 8.4 * u + bob, 1.9 * u, 1 * u, C('#6b4a2f'));
+      R(ctx, xx + 1.9 * u, peY - 7.7 * u + bob, 2.1 * u, 1 * u, C('#6b4a2f'));
+      R(ctx, xx - 3.9 * u, peY - 10.5 * u + bob, 1.3 * u, 0.4 * u, C('#9a8a70'));
+      R(ctx, xx - 1.4 * u, peY - 9.3 * u + bob, 1.2 * u, 1.2 * u, C('#e8b34a'));
+      R(ctx, xx - 1.1 * u, peY - 9 * u + bob, 0.6 * u, 0.6 * u, C('#6b4a2f'));
       // cinto com fivela
       R(ctx, xx - 4 * u, peY - 5.6 * u + bob, 8 * u, 0.8 * u, C('#6b5433'));
       R(ctx, xx - 0.7 * u, peY - 5.8 * u + bob, 1.4 * u, 1.2 * u, C('#e8b34a'));
@@ -131,8 +167,8 @@ export function desenharCavaleiro(ctx: Ctx2D, o: OptsCavaleiro): void {
     }
     // ---- cabeça conforme o elmo ----
     const tEl = eq.elmo || 0;
-    R(ctx, xx - 3.6 * u, peY - 16.6 * u + bob, 7.2 * u, 6.2 * u, '#1c2333');
-    R(ctx, xx - 3.6 * u, peY - 16.6 * u + bob, 7.2 * u, 1, shade('#8fa3bd', 1.25)); // sel-out
+    silhueta(ctx, xx, peY - 16.6 * u + bob, 7.2 * u, 6.2 * u, '#1c2333', 0.7 * u);
+    R(ctx, xx - 2.9 * u, peY - 16.6 * u + bob, 5.8 * u, 1, shade('#8fa3bd', 1.25)); // sel-out
     if (tEl === 0) {
       V(ctx, xx - 3 * u, peY - 16 * u + bob, 6 * u, 5 * u, C(PELE));
       // cabelo com volume: base + mecha clara no topo + costeletas
@@ -234,8 +270,13 @@ export function desenharCavaleiro(ctx: Ctx2D, o: OptsCavaleiro): void {
     ctx.restore();
 
     if (flash > 0) {
-      ctx.globalAlpha = Math.min(0.32, flash * 0.4);
-      R(ctx, xx - 4 * u, peY - 16 * u + bob, 11 * u, 16 * u, '#ffffff');
+      // brilho de impacto no contorno (sem caixa branca)
+      ctx.globalAlpha = Math.min(0.75, flash * 0.9);
+      R(ctx, xx - 2.4 * u, peY - 16.2 * u + bob, 3.4 * u, 0.7 * u, '#ffffff');
+      R(ctx, xx - 4.2 * u, peY - 10.6 * u + bob, 0.7 * u, 2.8 * u, '#ffffff');
+      R(ctx, xx + 3.4 * u, peY - 10.4 * u + bob, 0.6 * u, 2.4 * u, '#ffffff');
+      R(ctx, xx - 1 * u, peY - 2.2 * u, 1.4 * u, 0.6 * u, '#ffffff');
+      ctx.globalAlpha = 1;
     }
     ctx.restore();
   });

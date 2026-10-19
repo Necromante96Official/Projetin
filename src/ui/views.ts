@@ -4,6 +4,8 @@
 
 import {
   EQUIPS,
+  LUGARES,
+  MAX_PECAS,
   MAX_SKILL,
   MAX_TIER,
   ORDEM_SKILLS,
@@ -43,7 +45,7 @@ export function cavaleiroHtml(state: GameState): { titulo: string; html: string 
     ${stat('Vida', `${ICONS.heart} ${fmt(p.hp)}`)}
     ${stat('Velocidade', `${(1 / p.intervalo).toFixed(1)} golpes/s`)}
     ${stat('Regeneração', `${p.regen.toFixed(1)}/s`)}
-    ${stat('Peças equipadas', `${pecas}/18`)}
+    ${stat('Peças equipadas', `${pecas}/${MAX_PECAS}`)}
     ${stat('Skills', `${sk} níveis`)}
     <p class="hint" style="margin-top:10px">Ele segura o centro sozinho. Fortaleça com equipamentos e habilidades.</p>
   `,
@@ -60,7 +62,7 @@ export function lugarHtml(state: GameState): { titulo: string; html: string } {
     ${stat('Nível', `${state.nivel}/10`)}
     ${stat('Volta', v > 1 ? `Volta ${v} (reino corrompido)` : 'Volta 1')}
     ${stat('Inimigos', boss ? `BOSS: ${l.bossNome}` : `${totalInimigos(state.nivel)} na horda`)}
-    ${stat('Lugares criados', '2 de ∞ (volta e repete mais forte)')}
+    ${stat('Lugares criados', `${LUGARES.length} de ∞ (volta e repete mais forte)`)}
     <p class="hint" style="margin-top:10px">Limpe o Nv.10 (boss) para desbloquear o próximo lugar.</p>
   `,
   };

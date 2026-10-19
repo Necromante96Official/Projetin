@@ -5,9 +5,20 @@
 import { REGRAS } from '../core/data.js';
 import type { BiomaId, Inimigo } from '../core/types.js';
 import type { EquipVisual } from '../render/sprites/shared.js';
-import { W, H, CHAO_Y, PX, R, quadradoVazado, elipsePontos, type Ctx2D } from '../render/pixel.js';
-import { desenharCavaleiro, desenharMonstro, TIPOS } from '../render/sprites/index.js';
-import { biomaPorLugar, desenharCenario, novaParticula, type Particula } from './scenario.js';
+import { W, H, CHAO_Y, PX, R, elipsePixel, elipsePontos, type Ctx2D } from '../render/pixel.js';
+import {
+  desenharCavaleiro,
+  desenharMonstro,
+  EQUIP_VAZIO,
+  TIPOS,
+} from '../render/sprites/index.js';
+import {
+  biomaPorLugar,
+  desenharCenario,
+  desenharPrimeiroPlano,
+  novaParticula,
+  type Particula,
+} from './scenario.js';
 
 export interface ArenaFightConfig {
   playerAtk: number;
@@ -61,6 +72,7 @@ interface LutaAtiva extends ArenaFightConfig {
   lado: number;
   vivos: VivoArena[];
   player: { hp: number; max: number; cd: number };
+  hpSync: number;
   abates: number;
   ouro: number;
   fim: 'vitoria' | 'derrota' | null;
@@ -72,10 +84,23 @@ interface LutaAtiva extends ArenaFightConfig {
 }
 
 interface Fx {
-  tipo: 'puff' | 'slash';
+  tipo: 'puff' | 'slash' | 'morte';
   x: number;
   y: number;
   idade: number;
+  dir?: 1 | -1;
+  cor?: string;
+}
+
+interface Faisca {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  idade: number;
+  vida: number;
+  s: number;
+  cor: string;
 }
 
 interface DanoFlutuante {
@@ -101,14 +126,16 @@ export class Arena {
   private ultimo = 0;
   private parts: Particula[] = [];
   private fx: Fx[] = [];
+  private faiscas: Faisca[] = [];
   private danos: DanoFlutuante[] = [];
+  private flashDano = 0;
   private shake = 0;
   private splash: { txt: string; sub: string; idade: number } | null = null;
   private modo: 'descanso' | 'luta' = 'descanso';
   private lugarAbs = 0;
   private biomaId: BiomaId = 'campo';
   private nivelSeed = 1;
-  private equipPreview: EquipVisual = { elmo: 0, camisa: 0, calcas: 0, botas: 0, arma: 0, escudo: 0 };
+  private equipPreview: EquipVisual = { ...EQUIP_VAZIO };
   private cav: CavPose = { flash: 0, lunge: 0, swing: null, caido: false, dir: 1 };
   private luta: LutaAtiva | null = null;
   private erros = 0;
@@ -125,7 +152,7 @@ export class Arena {
     requestAnimationFrame(this.tickBound);
   }
 
-  descanso(lugarAbs: number, biomaId: BiomaId, equip?: EquipVisual): void {
+  descanso(lugarAbs: number, biomaId: BiomaId, equip?: EquipVisual, nivel = 1): void {
     // Resolve luta pendente (ex.: reset no meio da run) para não travar o await.
     if (this.luta?.resolve) {
       const L = this.luta;
@@ -136,7 +163,8 @@ export class Arena {
     this.modo = 'descanso';
     this.lugarAbs = lugarAbs;
     this.biomaId = biomaId;
-    this.equipPreview = equip ?? { elmo: 0, camisa: 0, calcas: 0, botas: 0, arma: 0, escudo: 0 };
+    this.nivelSeed = lugarAbs * 10 + nivel;
+    this.equipPreview = equip ?? { ...EQUIP_VAZIO };
     this.cav = { flash: 0, lunge: 0, swing: null, caido: false, dir: 1 };
   }
 
@@ -159,6 +187,19 @@ export class Arena {
 
   lutarHorda(cfg: ArenaFightConfig): Promise<ArenaResult> {
     return new Promise((resolve) => {
+      // Nunca deixa uma luta anterior pendurada (promise sem resolve = await eterno).
+      if (this.luta?.resolve) {
+        const anterior = this.luta;
+        this.luta = null;
+        anterior.resolve({
+          venceu: false,
+          abates: anterior.abates || 0,
+          ouro: anterior.ouro || 0,
+          tempo: 0,
+          abandonada: true,
+        });
+      }
+      this.erros = 0;
       this.modo = 'luta';
       this.lugarAbs = cfg.lugarAbs;
       this.biomaId = cfg.biomaId;
@@ -169,7 +210,8 @@ export class Arena {
         spawnT: 0,
         lado: 1,
         vivos: [],
-        player: { hp: cfg.playerHp, max: cfg.playerHp, cd: 0.4 },
+        player: { hp: cfg.playerHp, max: cfg.playerHp, cd: REGRAS.cdInicialJogador },
+        hpSync: 0,
         abates: 0,
         ouro: 0,
         fim: null,
@@ -181,9 +223,14 @@ export class Arena {
       };
       this.cav = { flash: 0, lunge: 0, swing: null, caido: false, dir: 1 };
       this.fx = [];
+      this.faiscas = [];
       this.danos = [];
+      this.flashDano = 0;
+      const chefe = cfg.inimigos[0];
       const nome =
-        cfg.nivel >= 10 ? `BOSS — ${cfg.inimigos[0].nome}` : `${cfg.lugarNome} — Nível ${cfg.nivel}`;
+        cfg.nivel >= 10
+          ? `BOSS — ${chefe?.nome ?? '???'}`
+          : `${cfg.lugarNome} — Nível ${cfg.nivel}`;
       this.splash = {
         txt: nome,
         sub: cfg.nivel >= 10 ? 'Derrote o chefão!' : `${cfg.inimigos.length} inimigos se aproximam!`,
@@ -206,6 +253,23 @@ export class Arena {
     return best;
   }
 
+  private emitirFaiscas(x: number, y: number, n: number, cores: string[], forca = 90): void {
+    for (let i = 0; i < n; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const vel = forca * (0.35 + Math.random() * 0.65);
+      this.faiscas.push({
+        x,
+        y,
+        vx: Math.cos(ang) * vel,
+        vy: Math.sin(ang) * vel - 30,
+        idade: 0,
+        vida: 0.28 + Math.random() * 0.42,
+        s: 1 + Math.random() * 2,
+        cor: cores[Math.floor(Math.random() * cores.length)],
+      });
+    }
+  }
+
   private matar(v: VivoArena, L: LutaAtiva): void {
     v.hp = 0;
     v.morto = true;
@@ -213,6 +277,9 @@ export class Arena {
     L.abates++;
     L.ouro += v.def.gold;
     this.danos.push({ x: v.x, y: 150, txt: `+${v.def.gold}`, c: '#e8b34a', idade: 0 });
+    const T = TIPOS[v.def.kind % TIPOS.length];
+    this.emitirFaiscas(v.x, 158, v.def.boss ? 26 : 12, [T.pele, '#fff3bf', '#e8b34a'], v.def.boss ? 150 : 95);
+    this.fx.push({ tipo: 'morte', x: v.x, y: 160, idade: 0, cor: T.pele });
     L.onAbate?.(v.def);
     L.onProgress?.(L.abates, L.inimigos.length);
   }
@@ -220,6 +287,7 @@ export class Arena {
   private tick(agora: number): void {
     try {
       this.passo(agora);
+      this.erros = 0; // só aborta por erros consecutivos, não por erros acumulados
     } catch (e) {
       this.erros = (this.erros || 0) + 1;
       if (console?.error) console.error('[arena] erro no tick (recuperado):', e);
@@ -254,11 +322,11 @@ export class Arena {
         L.vivos.push({
           def,
           hp: def.hp,
-          x: PX + L.lado * 290,
+          x: PX + L.lado * REGRAS.distSpawn,
           lado: L.lado,
           vel: REGRAS.velBase + (L.fila % 3) * 5,
           yOff: [-16, 2, 14][L.fila % 3],
-          cd: 0.6,
+          cd: REGRAS.cdInicialInimigo,
           swing: null,
           lunge: 0,
           flash: 0,
@@ -267,21 +335,36 @@ export class Arena {
           esc: def.boss ? 2.1 : 1,
           atkA: null,
         });
-        this.fx.push({ tipo: 'puff', x: PX + L.lado * 250, y: CHAO_Y + 10, idade: 0 });
+        this.fx.push({ tipo: 'puff', x: PX + L.lado * REGRAS.distSpawn, y: CHAO_Y + 10, idade: 0 });
         L.fila++;
         L.spawnT = REGRAS.spawnCd;
       }
       const P = L.player;
-      if (L.regen > 0) P.hp = Math.min(P.max, P.hp + L.regen * dt);
+      if (L.regen > 0) {
+        P.hp = Math.min(P.max, P.hp + L.regen * dt);
+        L.hpSync -= dt;
+        if (L.hpSync <= 0) {
+          L.hpSync = 0.5;
+          L.onPlayerHp?.(Math.max(0, Math.round(P.hp)), P.max);
+        }
+      }
       P.cd -= dt;
       if (P.cd <= 0) {
         const alvo = this.alvoProximo(L);
         if (alvo) {
           alvo.hp -= L.playerAtk;
           alvo.flash = 1;
-          this.cav.dir = alvo.x >= PX ? 1 : -1;
+          const dir = alvo.x >= PX ? 1 : -1;
+          this.cav.dir = dir;
           L.atkK = 0;
-          this.fx.push({ tipo: 'slash', x: (PX + alvo.x) / 2, y: CHAO_Y - 26, idade: 0 });
+          this.fx.push({
+            tipo: 'slash',
+            x: alvo.x - dir * 8,
+            y: CHAO_Y - 30,
+            idade: 0,
+            dir,
+          });
+          this.emitirFaiscas(alvo.x, CHAO_Y - 36, alvo.def.boss ? 14 : 8, ['#ffffff', '#ffd43b', '#fff3bf']);
           this.danos.push({ x: alvo.x, y: 132, txt: `-${L.playerAtk}`, c: '#ffd43b', idade: 0 });
           this.shake = Math.max(this.shake, alvo.def.boss ? 5 : 3);
           P.cd = L.intervalo || REGRAS.intervaloBase;
@@ -306,6 +389,8 @@ export class Arena {
             v.cd = REGRAS.intervaloInimigo;
             v.atkA = 0;
             this.cav.flash = 1;
+            this.flashDano = 1;
+            this.emitirFaiscas(PX - Math.sign(v.x - PX) * 12, CHAO_Y - 42, 7, ['#ff8787', '#ff6b6b', '#ffffff'], 75);
             this.danos.push({ x: PX - 14, y: CHAO_Y - 58, txt: `-${v.def.atk}`, c: '#ff8787', idade: 0 });
             this.shake = Math.max(this.shake, 4);
             L.onPlayerHp?.(Math.max(0, Math.round(P.hp)), P.max);
@@ -314,6 +399,14 @@ export class Arena {
           v.x -= Math.sign(v.x - PX) * v.vel * dt;
           if (Math.abs(v.x - PX) < REGRAS.alcanceInimigo)
             v.x = PX + Math.sign(v.x - PX) * REGRAS.alcanceInimigo;
+          if (Math.random() < dt * 2.6) {
+            this.fx.push({
+              tipo: 'puff',
+              x: v.x + (Math.random() - 0.5) * 8,
+              y: CHAO_Y + 20 + (v.yOff || 0),
+              idade: 0.22,
+            });
+          }
         }
         if (v.atkA != null) {
           v.atkA += dt;
@@ -386,6 +479,14 @@ export class Arena {
     this.parts = this.parts.filter((p) => p.vida > 0 && p.y < H + 6 && p.y > -12 && p.x > -12 && p.x < W + 12);
     for (const e of this.fx) e.idade += dt;
     this.fx = this.fx.filter((e) => e.idade < 0.45);
+    for (const f of this.faiscas) {
+      f.x += f.vx * dt;
+      f.y += f.vy * dt;
+      f.vy += 210 * dt;
+      f.idade += dt;
+    }
+    this.faiscas = this.faiscas.filter((f) => f.idade < f.vida);
+    this.flashDano = Math.max(0, this.flashDano - dt * 3.4);
     for (const d of this.danos) d.idade += dt;
     this.danos = this.danos.filter((d) => d.idade < 0.9);
     if (this.splash) {
@@ -414,15 +515,10 @@ export class Arena {
     }
 
     const s = 3.6, peY = CHAO_Y + 26;
-    const aura = (x: number, y: number, r: number): void => {
-      quadradoVazado(ctx, Math.round(x - r), Math.round(y - r), r * 2, '#000', 0.1);
-    };
-    aura(PX, peY - 30, 30);
     if (L) {
       for (const v of [...L.vivos].sort((a, b) => (a.yOff || 0) - (b.yOff || 0))) {
         if (v.morto && v.dieT <= 0) continue;
         const ey = peY + (v.yOff || 0);
-        aura(v.x, ey - 24, v.def.boss ? 46 : 24);
         const dir = (v.x >= PX ? -1 : 1) as 1 | -1;
         const atk = v.atkA != null ? (v.atkA as number) / 0.55 : null;
         let lunge = 0;
@@ -452,30 +548,51 @@ export class Arena {
           esc: v.esc,
         });
         ctx.restore();
-        // mini barra de vida ancorada na cabeça (compacta, com fundo e pino)
+        // mini barra de vida arredondada (sem quinas e sem pino)
         if (!v.morto) {
-          const bw = v.def.boss ? 56 : 22;
+          const bw = v.def.boss ? 64 : 28;
+          const bh = 5;
           const uE = s * 0.85 * (v.esc || 1);
           const T2 = TIPOS[v.def.kind % TIPOS.length];
           const topoCabeca = T2.extra === 'lobo' ? 11 * uE : (T2.h * uE * 0.5 + 5 * uE);
-          const topo = Math.round(ey - topoCabeca - 7);
-          const pct = Math.max(0, v.hp / v.def.hp);
+          const topo = Math.round(ey - topoCabeca - 8);
+          const pct = Math.max(0, Math.min(1, v.hp / v.def.hp));
           const corBarra = pct > 0.5 ? '#51cf66' : pct > 0.25 ? '#ffd43b' : '#ff6b6b';
           const bx0 = Math.round(v.x - bw / 2);
-          ctx.fillStyle = '#1c2333';
-          ctx.fillRect(bx0 - 1, topo - 1, bw + 2, 6);
-          ctx.fillStyle = corBarra;
-          ctx.fillRect(bx0, topo, Math.round(bw * pct), 2);
-          ctx.fillStyle = '#39424f';
-          ctx.fillRect(bx0, topo + 2, bw, 2);
-          ctx.fillStyle = '#1c2333';
-          ctx.fillRect(Math.round(v.x) - 1, topo + 4, 2, 6);
+          const pill = (x: number, y: number, w: number, h: number, c: string): void => {
+            if (w < 3 || h < 3) return;
+            ctx.fillStyle = c;
+            ctx.fillRect(x + 1, y, w - 2, 1);
+            ctx.fillRect(x, y + 1, w, h - 2);
+            ctx.fillRect(x + 1, y + h - 1, w - 2, 1);
+          };
+          pill(bx0 - 2, topo - 2, bw + 4, bh + 4, '#0d0a14');
+          pill(bx0, topo - 1, bw, bh + 2, '#2a2338');
+          if (pct > 0.01) {
+            const wf = Math.max(3, Math.round((bw - 2) * pct));
+            pill(bx0 + 1, topo, wf, bh, corBarra);
+            if (wf > 5) {
+              ctx.globalAlpha = 0.4;
+              ctx.fillStyle = '#ffffff';
+              ctx.fillRect(bx0 + 2, topo + 1, wf - 3, 1);
+              ctx.globalAlpha = 1;
+            }
+            ctx.fillStyle = 'rgba(13,10,20,0.45)';
+            for (let sx = bx0 + 5; sx < bx0 + wf; sx += 6) {
+              ctx.fillRect(sx, topo + 1, 1, bh - 2);
+            }
+            if (wf > 4) {
+              ctx.globalAlpha = 0.55;
+              ctx.fillStyle = '#ffffff';
+              ctx.fillRect(bx0 + wf - 2, topo + 2, 1, 2);
+              ctx.globalAlpha = 1;
+            }
+          }
         }
       }
     }
     const eq: EquipVisual =
-      (L?.equip as EquipVisual | undefined) ??
-      this.equipPreview ?? { elmo: 0, camisa: 0, calcas: 0, botas: 0, arma: 0, escudo: 0 };
+      (L?.equip as EquipVisual | undefined) ?? this.equipPreview ?? { ...EQUIP_VAZIO };
     desenharCavaleiro(ctx, {
       x: PX,
       peY,
@@ -489,38 +606,96 @@ export class Arena {
       equip: eq,
     });
 
-    // efeitos em pixels: slash = anéis pontilhados, puff = quadrados
+    // primeiro plano (tufos e pedras nas quinas) cria profundidade
+    desenharPrimeiroPlano(ctx, B, this.t);
+
+    // efeitos em pixels: rastro de corte, poeira e estilhaços
     for (const e of this.fx) {
-      const k = e.idade / 0.45;
+      const k = Math.min(1, e.idade / 0.45);
       if (e.tipo === 'slash') {
+        const dir = e.dir ?? 1;
+        const len = Math.round(12 + k * 26);
+        for (let i = 0; i < len; i += 2) {
+          const t2 = i / Math.max(1, len);
+          const px = e.x - dir * len * 0.5 + i * dir;
+          const py = e.y + (t2 - 0.5) * (6 + k * 10);
+          ctx.globalAlpha = (1 - k) * (1 - t2 * 0.7);
+          R(ctx, px, py, 3, 2, t2 < 0.35 ? '#ffffff' : '#ffd43b');
+        }
         ctx.globalAlpha = 1 - k;
-        elipsePontos(ctx, Math.round(e.x), Math.round(e.y), Math.round(8 + k * 18), Math.round(6 + k * 12), '#fff', 12, 2);
-        elipsePontos(ctx, Math.round(e.x), Math.round(e.y), Math.round(4 + k * 10), Math.round(3 + k * 7), '#ffd43b', 14, 2);
-        // núcleo do corte (cruz branca no centro)
-        const nk = Math.round((1 - k) * 4);
+        elipsePontos(ctx, Math.round(e.x), Math.round(e.y), Math.round(8 + k * 20), Math.round(6 + k * 13), '#fff', 12, 2);
+        elipsePontos(ctx, Math.round(e.x), Math.round(e.y), Math.round(4 + k * 11), Math.round(3 + k * 8), '#ffd43b', 14, 2);
+        // núcleo do corte + faíscas radiais
+        const nk = Math.round((1 - k) * 5);
         R(ctx, Math.round(e.x) - nk, Math.round(e.y) - 1, nk * 2, 2, '#ffffff');
         R(ctx, Math.round(e.x) - 1, Math.round(e.y) - nk, 2, nk * 2, '#ffffff');
+        for (let i = 0; i < 4; i++) {
+          const a = (i * Math.PI) / 2 + 0.5;
+          const rr = 7 + k * 24;
+          R(ctx, Math.round(e.x + Math.cos(a) * rr), Math.round(e.y + Math.sin(a) * rr), 2, 2, '#fff3bf');
+        }
         ctx.globalAlpha = 1;
       } else if (e.tipo === 'puff') {
-        const lado = Math.round(8 + k * 22);
-        quadradoVazado(ctx, Math.round(e.x - lado / 2), Math.round(e.y - k * 22 - lado / 2), lado, '#3a3348', 0.7 * (1 - k), 2);
+        const px = Math.round(e.x);
+        const py = Math.round(e.y - k * 12);
+        elipsePixel(ctx, px, py, Math.round(4 + k * 9), Math.round(2 + k * 5), '#b9b0c6', 0.25 * (1 - k));
+        elipsePontos(ctx, px, py, Math.round(5 + k * 11), Math.round(2 + k * 6), '#8d86a8', 24, 1);
+        for (let i = 0; i < 3; i++) {
+          ctx.globalAlpha = 0.3 * (1 - k);
+          R(ctx, e.x - 5 + i * 5 + k * 6, e.y - 3 - k * 10 - i * 2, 2, 2, '#8d86a8');
+        }
+        ctx.globalAlpha = 1;
+      } else if (e.tipo === 'morte') {
+        ctx.globalAlpha = (1 - k) * 0.7;
+        elipsePontos(ctx, e.x, e.y + 8, Math.round(10 + k * 26), Math.round(4 + k * 9), e.cor ?? '#e9e4da', 14, 2);
+        for (let i = 0; i < 8; i++) {
+          const a = (i * Math.PI) / 4 + 0.3;
+          const rr = 6 + k * 30;
+          R(
+            ctx,
+            Math.round(e.x + Math.cos(a) * rr),
+            Math.round(e.y + Math.sin(a) * rr * 0.45),
+            i % 2 === 0 ? 3 : 2,
+            i % 2 === 0 ? 3 : 2,
+            i % 2 === 0 ? '#e9e4da' : (e.cor ?? '#ffd43b'),
+          );
+        }
+        ctx.globalAlpha = 1;
       }
     }
 
-    // números flutuantes (contorno duplo p/ contraste no céu claro)
+    // faíscas dos impactos (gravidade + fade)
+    for (const f of this.faiscas) {
+      const k = 1 - f.idade / f.vida;
+      const sz = Math.max(1, Math.round(f.s * k));
+      ctx.globalAlpha = Math.min(1, k * 1.7);
+      R(ctx, f.x, f.y, sz, sz, f.cor);
+    }
+    ctx.globalAlpha = 1;
+
+    // flash vermelho nas bordas ao levar dano
+    if (this.flashDano > 0) {
+      ctx.globalAlpha = this.flashDano * 0.15;
+      ctx.fillStyle = '#ff4d5e';
+      ctx.fillRect(0, 0, W, 16);
+      ctx.fillRect(0, H - 16, W, 16);
+      ctx.fillRect(0, 16, 10, H - 32);
+      ctx.fillRect(W - 10, 16, 10, H - 32);
+      ctx.globalAlpha = 1;
+    }
+
+    // números flutuantes em fonte pixel (contorno p/ contraste)
     ctx.textAlign = 'center';
-    ctx.font = 'bold 16px monospace';
+    ctx.font = '9px "Press Start 2P", monospace';
     for (const d of this.danos) {
       const k = d.idade / 0.9;
       const dx = Math.round(d.x), dy = Math.round(d.y - k * 34);
       ctx.globalAlpha = 1 - k * k;
       ctx.fillStyle = '#241f26';
-      ctx.fillText(d.txt, dx - 2, dy);
-      ctx.fillText(d.txt, dx + 2, dy);
-      ctx.fillText(d.txt, dx, dy - 2);
-      ctx.fillText(d.txt, dx, dy + 2);
-      ctx.fillText(d.txt, dx - 1, dy - 1);
-      ctx.fillText(d.txt, dx + 1, dy + 1);
+      ctx.fillText(d.txt, dx - 1, dy);
+      ctx.fillText(d.txt, dx + 1, dy);
+      ctx.fillText(d.txt, dx, dy - 1);
+      ctx.fillText(d.txt, dx, dy + 1);
       ctx.fillStyle = '#ffffff';
       ctx.fillText(d.txt, dx - 1, dy - 1);
       ctx.fillStyle = d.c;
@@ -528,38 +703,118 @@ export class Arena {
       ctx.globalAlpha = 1;
     }
 
-    // banner do boss
+    // banner do boss em moldura pixel
     const bossVivo = L?.vivos.find((v) => !v.morto && v.def.boss);
     if (bossVivo) {
-      ctx.fillStyle = 'rgba(0,0,0,0.55)';
-      ctx.fillRect(60, 10, W - 120, 30);
-      ctx.strokeStyle = '#e03131';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(60, 10, W - 120, 30);
+      const bw = Math.min(304, W - 80);
+      const bx = Math.round(W / 2 - bw / 2);
+      const by = 8;
+      const bh = 42;
+      ctx.fillStyle = 'rgba(12,8,18,0.82)';
+      ctx.fillRect(bx, by, bw, bh);
+      ctx.fillStyle = '#0d0a14';
+      ctx.fillRect(bx - 2, by - 2, bw + 4, bh + 4);
+      ctx.fillStyle = 'rgba(232,179,74,0.75)';
+      ctx.fillRect(bx, by, bw, 1);
+      ctx.fillRect(bx, by + bh - 1, bw, 1);
+      ctx.fillRect(bx, by, 1, bh);
+      ctx.fillRect(bx + bw - 1, by, 1, bh);
+      // rebites de canto
+      for (const [cx, cy] of [
+        [bx + 5, by + 5],
+        [bx + bw - 8, by + 5],
+        [bx + 5, by + bh - 8],
+        [bx + bw - 8, by + bh - 8],
+      ] as const) {
+        R(ctx, cx, cy, 3, 3, '#e8b34a');
+      }
+      // caveirinha pixel à esquerda
+      const sx = bx + 9, sy = by + 12;
+      R(ctx, sx, sy, 8, 7, '#e9e4da');
+      R(ctx, sx, sy + 7, 8, 2, '#e9e4da');
+      R(ctx, sx + 1, sy + 2, 2, 2, '#1a1015');
+      R(ctx, sx + 5, sy + 2, 2, 2, '#1a1015');
+      R(ctx, sx + 3, sy + 5, 2, 1, '#1a1015');
+      ctx.textBaseline = 'middle';
+      ctx.font = '8px "Press Start 2P", monospace';
+      ctx.fillStyle = '#2a0505';
+      ctx.fillText(bossVivo.def.nome, W / 2 + 1, by + 16 + 1);
       ctx.fillStyle = '#ffc9c9';
-      ctx.font = 'bold 11px monospace';
-      ctx.fillText(`☠ ${bossVivo.def.nome} ☠`, W / 2, 23);
-      ctx.fillStyle = '#3a0d0d';
-      ctx.fillRect(66, 28, W - 132, 7);
-      ctx.fillStyle = '#e03131';
-      ctx.fillRect(66, 28, Math.round((W - 132) * Math.max(0, bossVivo.hp / bossVivo.def.hp)), 7);
+      ctx.fillText(bossVivo.def.nome, W / 2, by + 16);
+      // barra de vida arredondada e segmentada
+      const barX = bx + 12;
+      const barY = by + 27;
+      const barW = bw - 24;
+      const barH = 8;
+      const barra = (x: number, y: number, w: number, h: number, c: string): void => {
+        if (w < 4 || h < 4) return;
+        ctx.fillStyle = c;
+        ctx.fillRect(x + 2, y, w - 4, 2);
+        ctx.fillRect(x, y + 2, w, h - 4);
+        ctx.fillRect(x + 2, y + h - 2, w - 4, 2);
+      };
+      barra(barX - 2, barY - 2, barW + 4, barH + 4, '#250b10');
+      barra(barX, barY, barW, barH, '#4a1218');
+      const wBoss = Math.round(barW * Math.max(0, Math.min(1, bossVivo.hp / bossVivo.def.hp)));
+      if (wBoss > 3) {
+        barra(barX, barY, wBoss, barH, '#e03131');
+        ctx.fillStyle = '#ff8787';
+        ctx.fillRect(barX + 2, barY + 2, Math.max(0, wBoss - 4), 2);
+        ctx.fillStyle = 'rgba(12,8,18,0.5)';
+        for (let sx2 = barX + 7; sx2 < barX + wBoss; sx2 += 8) ctx.fillRect(sx2, barY + 2, 1, barH - 4);
+        ctx.fillStyle = '#ffd43b';
+        ctx.fillRect(barX + wBoss - 3, barY + 2, 1, barH - 4);
+      }
+      ctx.textBaseline = 'alphabetic';
     }
 
-    // splash
+    // splash de início/fim em painel pixel
     if (this.splash) {
       const k = this.splash.idade;
       ctx.globalAlpha = k < 0.3 ? k / 0.3 : k > 2 ? Math.max(0, 1 - (k - 2) / 0.4) : 1;
       ctx.textAlign = 'center';
-      ctx.fillStyle = '#000';
-      ctx.font = 'bold 24px monospace';
-      ctx.fillText(this.splash.txt, W / 2 + 2, 102);
-      ctx.fillStyle = '#f6d789';
-      ctx.fillText(this.splash.txt, W / 2, 100);
-      ctx.font = 'bold 12px monospace';
-      ctx.fillStyle = '#000';
-      ctx.fillText(this.splash.sub, W / 2 + 1, 121);
-      ctx.fillStyle = '#fff';
-      ctx.fillText(this.splash.sub, W / 2, 120);
+      ctx.textBaseline = 'middle';
+      ctx.font = '16px "Press Start 2P", monospace';
+      const titulo = this.splash.txt;
+      const tw = ctx.measureText(titulo).width;
+      const pw = Math.min(W - 48, Math.max(248, Math.ceil(tw) + 70));
+      const ph = 58;
+      const px = Math.round(W / 2 - pw / 2);
+      const py = 64;
+      const derrota = titulo.toUpperCase().includes('DERROTA');
+      const corTitulo = derrota ? '#ff8787' : '#ffd43b';
+      ctx.fillStyle = 'rgba(10,7,16,0.82)';
+      ctx.fillRect(px, py, pw, ph);
+      ctx.fillStyle = 'rgba(232,179,74,0.75)';
+      ctx.fillRect(px, py, pw, 2);
+      ctx.fillRect(px, py + ph - 2, pw, 2);
+      ctx.fillRect(px, py, 2, ph);
+      ctx.fillRect(px + pw - 2, py, 2, ph);
+      for (const [cx, cy] of [
+        [px + 4, py + 4],
+        [px + pw - 8, py + 4],
+        [px + 4, py + ph - 8],
+        [px + pw - 8, py + ph - 8],
+      ] as const) {
+        R(ctx, cx, cy, 4, 4, '#e8b34a');
+      }
+      const linhaW = Math.max(0, Math.round((pw - tw) / 2) - 34);
+      if (linhaW > 8) {
+        R(ctx, px + 18, py + 27, linhaW, 2, '#8a6414');
+        R(ctx, px + 18 + linhaW - 4, py + 25, 4, 6, '#e8b34a');
+        R(ctx, px + pw - 18 - linhaW, py + 27, linhaW, 2, '#8a6414');
+        R(ctx, px + pw - 18 - linhaW, py + 25, 4, 6, '#e8b34a');
+      }
+      ctx.fillStyle = '#1a0e04';
+      ctx.fillText(titulo, W / 2 + 2, py + 28 + 2);
+      ctx.fillStyle = corTitulo;
+      ctx.fillText(titulo, W / 2, py + 28);
+      ctx.font = '7px "Press Start 2P", monospace';
+      ctx.fillStyle = '#241f26';
+      ctx.fillText(this.splash.sub, W / 2 + 1, py + 46 + 1);
+      ctx.fillStyle = '#e9e4da';
+      ctx.fillText(this.splash.sub, W / 2, py + 46);
+      ctx.textBaseline = 'alphabetic';
       ctx.globalAlpha = 1;
     }
     ctx.restore();

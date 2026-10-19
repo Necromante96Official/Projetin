@@ -11,7 +11,9 @@ export function stat(label: string, valor: string): string {
 }
 
 export function pips(atual: number, max: number): string {
-  return `<span class="pips">${'●'.repeat(atual)}${'○'.repeat(max - atual)}</span>`;
+  const total = Math.max(0, Math.floor(max));
+  const n = Number.isFinite(atual) ? Math.min(total, Math.max(0, Math.floor(atual))) : 0;
+  return `<span class="pips">${'●'.repeat(n)}${'○'.repeat(total - n)}</span>`;
 }
 
 export class ModalManager {

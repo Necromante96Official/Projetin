@@ -2,7 +2,7 @@
 // A simulação usa as MESMAS regras da animação (engine/arena.ts):
 // se mudar alcance/velocidade/regen aqui, mude lá também (ver REGRAS).
 
-import { LUGARES, NOMES_MONSTROS, REGRAS } from './data.js';
+import { LUGARES, MAX_LUGAR, NOMES_MONSTROS, REGRAS } from './data.js';
 import { parametrosCombate } from './combat.js';
 import type {
   AvancoNivel,
@@ -98,7 +98,7 @@ export function simularHorda(state: GameState): SimResult {
   let ladoAlt = 1;
   let t = 0;
   let hp = P.hp;
-  let cd = 0;
+  let cd = R.cdInicialJogador;
   const dt = 0.05;
   const PX = 240;
   const contaMortos = (): number => vivos.filter((v) => v.def.hp <= 0).length;
@@ -126,8 +126,8 @@ export function simularHorda(state: GameState): SimResult {
       ladoAlt *= -1;
       vivos.push({
         def: { ...horda.inimigos[fila] },
-        x: PX + ladoAlt * 280,
-        cd: 0.6,
+        x: PX + ladoAlt * R.distSpawn,
+        cd: R.cdInicialInimigo,
         vel: R.velBase + (fila % 3) * 5,
       });
       fila++;
@@ -168,6 +168,7 @@ export function simularHorda(state: GameState): SimResult {
 export function avancarNivel(state: GameState): AvancoNivel {
   if (state.nivel >= 10) {
     state.nivel = 1;
+    if (state.lugar >= MAX_LUGAR) return { subiuLugar: false, volta: voltaDe(state.lugar) };
     state.lugar += 1;
     return { subiuLugar: true, volta: voltaDe(state.lugar) };
   }
