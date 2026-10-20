@@ -28,6 +28,7 @@
           <div class="recurso"><span class="rec-icone">💀</span><div><small>Derrotas</small><strong id="derrotas">0</strong></div></div>
         </div>
         <div class="top-actions">
+          <button id="btn-renascer" class="btn-ghost"><span id="renascer-label">👑 Renascer</span><span id="renascer-dot" class="dot hidden"></span></button>
           <button id="btn-cronicas" class="btn-ghost">📜 Crônicas<span id="cronicas-dot" class="dot hidden"></span></button>
           <button id="btn-ajuda" class="btn-ghost">❓ Ajuda</button>
         </div>
@@ -72,7 +73,7 @@
           </div>
           <canvas id="cena" width="480" height="270"></canvas>
           <div class="bioma-row"><span id="bioma">📍 Campo Verde</span></div>
-          <div id="resultado-flash" class="resultado-flash"></div>
+          <div id="resultado-flash" class="resultado-flash" role="status" aria-live="polite"></div>
           <div class="controles-batalha">
             <button id="lutar-agora" class="btn-primary"><span data-ic="swords"></span> Lutar agora</button>
             <button id="reset" class="btn-ghost" title="Apagar save">↺ Reset</button>
@@ -83,6 +84,12 @@
 
         <!-- DIREITA: equipamento + skills -->
         <aside class="coluna coluna-loja">
+          <section class="card" id="card-mochila">
+            <div class="card-head"><h2>🎒 Mochila</h2><span id="mochila-contador" class="nivel-pill">0/50</span></div>
+            <div class="mochila-track"><div id="mochila-fill" class="mochila-fill"></div></div>
+            <p id="mochila-resumo" class="hint" style="margin:8px 0 0">Vazia — derrote monstros para achar itens.</p>
+            <button id="btn-mochila" class="btn-primary btn-block">🎒 Abrir mochila</button>
+          </section>
           <section class="card" id="card-equip">
             <div class="card-head"><h2>🛡️ Equipamento</h2></div>
             <div id="paperdoll" class="paperdoll"></div>
@@ -90,6 +97,7 @@
           </section>
           <section class="card">
             <button id="btn-skills" class="btn-primary btn-block">✨ Habilidades</button>
+            <button id="btn-auto-comprar" class="btn-ghost btn-block" title="Compra as melhorias mais baratas que couberem no seu ouro">⚡ Comprar acessível</button>
             <p class="hint" style="margin:8px 0 0">Compre peças e skills com ouro. O cavaleiro luta sozinho.</p>
             <div class="dica">
               <strong>💡 Estratégia:</strong> perdeu duas seguidas? Priorize <b>Camisa, Calças e Vigor</b>. Ganhando fácil? Invista em <b>Arma e Saque</b>.
@@ -105,7 +113,7 @@
 
     <!-- Painel flutuante -->
     <div id="modal-backdrop" class="modal-backdrop hidden">
-      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-titulo">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-titulo" tabindex="-1">
         <div class="modal-head">
           <h3 id="modal-titulo">Detalhes</h3>
           <button id="modal-fechar" class="btn-ghost" aria-label="Fechar">✕</button>

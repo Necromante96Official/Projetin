@@ -1,7 +1,8 @@
 // core/state.ts — criação e migração de save. Único lugar que conhece
 // os formatos antigos (fase única, esquadrão, prédios) e o saneamento anti-NaN.
 
-import { MAX_LUGAR, MAX_SKILL, MAX_TIER, ORDEM_SKILLS, ORDEM_SLOTS } from './data.js';
+import { MAX_LUGAR, MAX_SKILL, MAX_TIER, ORDEM_SKILLS, ORDEM_SLOTS, PRESTIGIO } from './data.js';
+import { criarInventarioInicial, sanitizarInventario } from './inventory.js';
 import type { EquipSlot, GameState, SaveCru, SkillId } from './types.js';
 
 const num = (v: unknown, d: number): number => {
@@ -22,6 +23,16 @@ const inteiroSeguro = (v: unknown, d: number): number =>
 const statSegura = (v: unknown, d: number): number =>
   Math.min(Number.MAX_SAFE_INTEGER, Math.max(1, num(v, d)));
 
+const nomeSeguro = (v: unknown): string => {
+  if (typeof v !== 'string') return 'Sor Aria';
+  const limpo = v
+    .replace(/[<>&]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 24);
+  return limpo || 'Sor Aria';
+};
+
 export function criarEstadoInicial(): GameState {
   return {
     ouro: 30,
@@ -33,6 +44,9 @@ export function criarEstadoInicial(): GameState {
     equip: { elmo: 0, camisa: 0, calcas: 0, botas: 0, arma: 0, escudo: 0 },
     skills: { afiado: 0, vigor: 0, regen: 0, rapidez: 0, saque: 0 },
     cavaleiro: { nome: 'Sor Aria', atk: 10, hp: 100 },
+    brasoes: 0,
+    renascimentos: 0,
+    inventario: criarInventarioInicial(),
     updatedAt: Date.now(),
   };
 }
@@ -76,11 +90,17 @@ export function migrarSave(state: SaveCru | null | undefined): GameState {
   delete s.herois;
   if (!s.cavaleiro || typeof s.cavaleiro !== 'object') s.cavaleiro = { ...base.cavaleiro };
   s.cavaleiro = {
-    nome:
-      typeof s.cavaleiro.nome === 'string' && s.cavaleiro.nome ? s.cavaleiro.nome : 'Sor Aria',
+    nome: nomeSeguro(s.cavaleiro.nome),
     atk: statSegura(s.cavaleiro.atk, 10),
     hp: statSegura(s.cavaleiro.hp, 100),
   };
+
+  // prestígio: nunca NaN e nunca acima do teto (evita multiplicador infinito)
+  s.brasoes = Math.min(PRESTIGIO.maxBrasoes, inteiroSeguro(s.brasoes, 0));
+  s.renascimentos = inteiroSeguro(s.renascimentos, 0);
+
+  // mochila: capacidade em passos de 50, itens/auto-reciclagem válidos
+  s.inventario = sanitizarInventario((state as SaveCru).inventario);
 
   // prédios antigos viram reembolso em ouro (sistema removido)
   let refund = 0;

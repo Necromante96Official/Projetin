@@ -11,11 +11,13 @@ src/
   vite-env.d.ts
   core/                    REGRAS DO JOGO — puro, sem DOM/canvas/storage
     types.ts               tipos canônicos (GameState, Horda, Inimigo, ...)
-    data.ts                balanceamento (EQUIPS, SKILLS, LUGARES, REGRAS)
+    data.ts                balanceamento (EQUIPS, SKILLS, LUGARES, REGRAS, itens)
     state.ts               criarEstadoInicial + migrarSave (anti-NaN, saves antigos)
     combat.ts              parametrosCombate / poderCavaleiro / poderTime
     horde.ts               lugarDe, gerarHorda, simularHorda, avancarNivel
-    shop.ts                custo/compra de equip + skills
+    shop.ts                custo/compra de equip + skills + compra acessível
+    prestige.ts            brasoesDisponiveis, podeRenascer, renascer
+    inventory.ts           drops por tipo/raridade, pity, mochila, auto-reciclagem, upgrade
     offline.ts             ouroPorMinuto, calcularGanhoOffline
     index.ts               barrel (import único do núcleo)
   engine/                  TEMPO REAL — canvas + relógio
@@ -24,7 +26,7 @@ src/
   render/                  PIXEL ART — só fillRect/fillText arredondados
     pixel.ts               primitivas (R, V, shade, piramide, matriz, ...)
     palette.ts             PALETA fonte única + validarSprite + SPEC
-    icons.ts               SVGs da UI + hidratarIcones
+    icons.ts               SVGs da UI + 12 ícones de item + hidratarIcones
     sprites/
       shared.ts            poses + EquipVisual
       knight.ts            desenharCavaleiro (6 slots × 4 tiers)
@@ -40,7 +42,7 @@ src/
     controller.ts          GameController — estado + timers + batalha + boot
   styles/                  CSS (base, layout, componentes)
 test/
-  game.test.ts             regras/loja/horda/save/offline
+  game.test.ts             regras/loja/horda/save/offline/prestígio/inventário/itens
   palette.test.ts          paleta/spec/matriz/biomas
 ```
 
@@ -68,6 +70,9 @@ core  →  nada (puro)
 | Novo tier visual | `render/sprites/knight.ts` + `core/data.ts` (nome/custo/atk/hp) | visual + `test/game` tiers |
 | Novo monstro | `render/sprites/monsters.ts` (`TIPOS` + bloco `extra`) + `core/data.ts` (`LUGARES`) | `npm test` + arena |
 | Novo bioma | `engine/scenario.ts` (`BIOMAS` + `novaParticula` + camadas) + `core/data.ts` lugar | visual |
+| Balancear renascimento | `core/data.ts` (`PRESTIGIO`) + `core/prestige.ts` (fórmula) | `npm test` + simulação |
+| Balancear drops/mochila | `core/data.ts` (`RARIDADE_INFO`, `TIPOS_ITEM`, `INVENTARIO`) + `core/inventory.ts` | `npm test` inventário |
+| Adicionar visual de item | `core/types.ts` (`ItemTipo`) + `core/data.ts` (`TIPOS_ITEM`) + `render/icons.ts` | `npm test` catálogo + modal |
 | Novo modal/loja | `ui/views.ts` (HTML) + `ui/controller.ts` (wiring) | manual |
 | Novo campo no save | `core/types.ts` + `core/state.ts` (default + migração) | `npm test` migração |
 
@@ -81,13 +86,24 @@ core  →  nada (puro)
   (`validarSprite` acusa intrusa); luz sempre do topo.
 - `Arena` nunca trava o jogo: watchdog interno + `forcarFim()` + `try/catch` no
   tick com `erro > 25 → resolve(erro)`. Controller tem vigia própria por run.
+- Prestígio: `core/prestige.ts` é a única regra de reset. `PRESTIGIO` fica em
+  `data.ts`; `combat.ts` aplica os multiplicadores (stats e ouro) e o save migra
+  `brasoes`/`renascimentos` com teto. Renascer preserva vitórias/derrotas/abates.
+- Inventário: `core/inventory.ts` é a única regra de drops/venda/upgrade. O rng é
+  injetável (testes determinísticos). `RARIDADE_INFO`, `TIPOS_ITEM` e `INVENTARIO`
+  ficam em `data.ts`; `state.ts` sanitiza capacidade em passos de 50, itens (tipo
+  inferido em saves antigos), auto-reciclagem e o contador de pity. `rolarDrops`
+  atualiza `inventario.semDrops`: 10 abates secos garantem o próximo drop; BOSS
+  reseta o pity e garante ao menos um raro. `listarInventario` filtra/ordena sem
+  mutar a mochila; `venderItensPorRaridade` vende um lote exato. Renascer preserva
+  mochila, capacidade, pity e configuração de auto-reciclagem.
 
 ## Comandos
 
 ```bash
 npm install
 npm run dev        # jogo com HMR
-npm test           # vitest (20 testes)
+npm test           # vitest (47 testes)
 npm run typecheck  # tsc --noEmit
 npm run build      # typecheck + bundle p/ dist/ (GitHub Pages)
 ```

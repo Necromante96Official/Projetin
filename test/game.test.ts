@@ -1,25 +1,56 @@
 import { describe, expect, it } from 'vitest';
 import {
   EQUIPS,
+  INVENTARIO,
   MAX_LUGAR,
   MAX_SKILL,
   MAX_TIER,
   ORDEM_SKILLS,
   ORDEM_SLOTS,
+  ORDEM_TIPOS_ITEM,
+  PRESTIGIO,
+  RARIDADES,
+  RARIDADE_INFO,
   SKILLS,
+  TIPOS_ITEM,
   avancarNivel,
+  bonusPrestigio,
+  brasoesDisponiveis,
   calcularGanhoOffline,
+  chanceDropNormal,
   comprarEquip,
+  comprarMelhoriasAcessiveis,
   comprarSkill,
   criarEstadoInicial,
+  criarInventarioInicial,
   custoEquip,
+  custoProximaMelhoria,
+  custoUpgradeInventario,
+  definirAutoReciclar,
   gerarHorda,
+  listarInventario,
   lugarDe,
+  melhorarInventario,
   migrarSave,
+  ouroPorMinuto,
   parametrosCombate,
+  pityRestante,
+  podeRenascer,
   poderCavaleiro,
+  processarDrops,
+  renascer,
+  rolarDrops,
+  sanitizarInventario,
   simularHorda,
+  sortearRaridade,
+  valorItem,
+  venderItem,
+  venderItensPorRaridade,
+  venderTodosItens,
+  type ItemInventario,
+  type Raridade,
 } from '../src/core/index.js';
+import { ICONES_ITENS, iconeItem } from '../src/render/icons.js';
 
 describe('reino idle — equipamentos + skills', () => {
   it('começa pelado: tiers 0 e skills 0', () => {
@@ -121,6 +152,16 @@ describe('reino idle — equipamentos + skills', () => {
     expect(g.ouro).toBe(0);
   });
 
+  it('renda offline usa o estágio normal, não o ouro inflado do BOSS', () => {
+    const s = criarEstadoInicial();
+    s.nivel = 10;
+    s.lugar = 0;
+    const horda = gerarHorda(s);
+    expect(horda.boss).toBe(true);
+    expect(ouroPorMinuto(s)).toBeLessThan((horda.inimigos[0]?.gold ?? 0) * 4);
+    expect(ouroPorMinuto(s)).toBe(Math.round((3 + 10 * 1.5) * 4));
+  });
+
   it('saneia save corrompido: ouro, lugar, relógio, equip e stats', () => {
     const agora = Date.now();
     const s = migrarSave({
@@ -174,5 +215,407 @@ describe('reino idle — equipamentos + skills', () => {
     }
     expect(Object.keys(SKILLS)).toHaveLength(ORDEM_SKILLS.length);
     expect(MAX_SKILL).toBe(5);
+  });
+
+  it('renascimento só libera depois do lugar mínimo', () => {
+    const s = criarEstadoInicial();
+    expect(podeRenascer(s)).toBe(false);
+    expect(brasoesDisponiveis(s)).toBe(0);
+    s.lugar = PRESTIGIO.lugarMinimo;
+    expect(podeRenascer(s)).toBe(true);
+    expect(brasoesDisponiveis(s)).toBeGreaterThan(0);
+    expect(renascer(s).possivel).toBe(true);
+  });
+
+  it('renascer zera loja/lugar e preserva brasões e registros', () => {
+    const s = criarEstadoInicial();
+    s.lugar = 3;
+    s.nivel = 6;
+    s.ouro = 5000;
+    s.equip.arma = MAX_TIER;
+    s.skills.afiado = 3;
+    s.vitorias = 42;
+    const ganho = brasoesDisponiveis(s);
+    const r = renascer(s);
+    expect(r.possivel).toBe(true);
+    expect(r.ganhos).toBe(ganho);
+    expect(s.brasoes).toBe(ganho);
+    expect(s.renascimentos).toBe(1);
+    expect(s.lugar).toBe(0);
+    expect(s.nivel).toBe(1);
+    expect(ORDEM_SLOTS.every((k) => s.equip[k] === 0)).toBe(true);
+    expect(ORDEM_SKILLS.every((k) => s.skills[k] === 0)).toBe(true);
+    expect(s.ouro).toBe(PRESTIGIO.ouroInicialBase + ganho * PRESTIGIO.ouroInicialPorBrasao);
+    expect(s.vitorias).toBe(42);
+  });
+
+  it('não renasce sem progresso suficiente', () => {
+    const s = criarEstadoInicial();
+    const r = renascer(s);
+    expect(r.possivel).toBe(false);
+    expect(s.renascimentos).toBe(0);
+  });
+
+  it('brasões aumentam ataque, vida, regeneração e ouro', () => {
+    const s = criarEstadoInicial();
+    s.skills.regen = 1;
+    const base = parametrosCombate(s);
+    s.brasoes = 5;
+    const buff = parametrosCombate(s);
+    expect(buff.atk).toBeGreaterThan(base.atk);
+    expect(buff.hp).toBeGreaterThan(base.hp);
+    expect(buff.regen).toBeGreaterThan(base.regen);
+    expect(buff.ouroMult).toBeGreaterThan(base.ouroMult);
+    expect(bonusPrestigio(s).stats).toBeGreaterThan(1);
+  });
+
+  it('renascimento vira uma parede de progresso em vitória', () => {
+    const s = criarEstadoInicial();
+    s.lugar = 3;
+    s.nivel = 6;
+    for (const slot of ORDEM_SLOTS) s.equip[slot] = MAX_TIER;
+    for (const id of ORDEM_SKILLS) s.skills[id] = MAX_SKILL;
+    expect(simularHorda(s).venceu).toBe(false);
+    s.brasoes = 8;
+    expect(simularHorda(s).venceu).toBe(true);
+  });
+
+  it('compra acessível respeita o saldo e para quando não há mais nada', () => {
+    const s = criarEstadoInicial();
+    s.ouro = 500;
+    const r = comprarMelhoriasAcessiveis(s);
+    expect(r.compras).toBeGreaterThan(0);
+    expect(r.gasto).toBe(500 - s.ouro);
+    expect(r.gasto).toBeLessThanOrEqual(500);
+    const proximo = custoProximaMelhoria(s);
+    expect(proximo === null || proximo > s.ouro).toBe(true);
+
+    s.ouro = 999999;
+    comprarMelhoriasAcessiveis(s);
+    expect(custoProximaMelhoria(s)).toBeNull();
+    expect(comprarMelhoriasAcessiveis(s)).toEqual({ compras: 0, gasto: 0 });
+  });
+
+  it('migra brasões/renascimentos e sanitiza o nome do cavaleiro', () => {
+    const s = migrarSave({
+      brasoes: 1e9,
+      renascimentos: Number.NaN,
+      cavaleiro: { nome: '<b>Aria</b>', atk: 10, hp: 100 },
+    });
+    expect(s.brasoes).toBe(PRESTIGIO.maxBrasoes);
+    expect(s.renascimentos).toBe(0);
+    expect(s.cavaleiro.nome).not.toContain('<');
+    expect(s.cavaleiro.nome).not.toContain('>');
+  });
+});
+
+describe('reino idle — mochila e drops', () => {
+  it('começa com 50 slots, vazia e sem auto-reciclagem', () => {
+    const s = criarEstadoInicial();
+    expect(s.inventario).toEqual(criarInventarioInicial());
+    expect(s.inventario.capacidade).toBe(INVENTARIO.slotsIniciais);
+    expect(s.inventario.itens).toHaveLength(0);
+    expect(s.inventario.autoReciclar).toBeNull();
+    expect(s.inventario.semDrops).toBe(0);
+  });
+
+  it('raridades têm pesos que somam 100% e valor crescente', () => {
+    expect(RARIDADES).toHaveLength(5);
+    for (let i = 1; i < RARIDADES.length; i++) {
+      expect(RARIDADE_INFO[RARIDADES[i]].valorMult).toBeGreaterThan(
+        RARIDADE_INFO[RARIDADES[i - 1]].valorMult,
+      );
+    }
+    const normal = RARIDADES.reduce((s, r) => s + RARIDADE_INFO[r].pesoNormal, 0);
+    const boss = RARIDADES.reduce((s, r) => s + RARIDADE_INFO[r].pesoBoss, 0);
+    expect(normal).toBeCloseTo(100);
+    expect(boss).toBeCloseTo(100);
+  });
+
+  it('catálogo tem 12 tipos, 5 nomes por raridade e ícone próprio', () => {
+    expect(ORDEM_TIPOS_ITEM).toHaveLength(12);
+    const nomes = new Set<string>();
+    let pesoTotal = 0;
+    for (const tipo of ORDEM_TIPOS_ITEM) {
+      const def = TIPOS_ITEM[tipo];
+      expect(def.nome.length).toBeGreaterThan(0);
+      expect(def.valorMult).toBeGreaterThan(0);
+      expect(def.peso).toBeGreaterThan(0);
+      for (const raridade of RARIDADES) {
+        expect(def.nomes[raridade].length).toBeGreaterThan(0);
+        nomes.add(def.nomes[raridade]);
+      }
+      expect(ICONES_ITENS[tipo]).toBe(iconeItem(tipo));
+      expect(iconeItem(tipo)).toContain('<svg');
+      pesoTotal += def.peso;
+    }
+    expect(nomes.size).toBe(ORDEM_TIPOS_ITEM.length * RARIDADES.length);
+    expect(pesoTotal).toBeCloseTo(100);
+  });
+
+  it('sorteia raridades pelas bordas dos pesos', () => {
+    const pesos = RARIDADES.map((r) => RARIDADE_INFO[r].pesoNormal);
+    expect(sortearRaridade(pesos, () => 0)).toBe('comum');
+    expect(sortearRaridade(pesos, () => 0.9)).toBe('raro');
+    expect(sortearRaridade(pesos, () => 0.999999)).toBe('lendario');
+    expect(sortearRaridade(pesos, () => 1)).toBe('lendario');
+    expect(sortearRaridade([0, 0, 0, 0, 0], () => 0.5)).toBe('comum');
+  });
+
+  it('BOSS solta 3 itens e abate normal respeita a chance atual', () => {
+    const boss = criarEstadoInicial();
+    expect(rolarDrops(boss, { boss: true, rng: () => 0 })).toHaveLength(INVENTARIO.itensBoss);
+    const seco = criarEstadoInicial();
+    expect(rolarDrops(seco, { rng: () => 0.99 })).toHaveLength(0);
+    expect(seco.inventario.semDrops).toBe(1);
+    const molhado = criarEstadoInicial();
+    expect(rolarDrops(molhado, { rng: () => 0 })).toHaveLength(1);
+    expect(molhado.inventario.semDrops).toBe(0);
+  });
+
+  it('chance de drop cresce por nível e o pity garante o próximo item', () => {
+    const s = criarEstadoInicial();
+    expect(chanceDropNormal(s)).toBeCloseTo(0.415);
+    s.nivel = 10;
+    expect(chanceDropNormal(s)).toBeCloseTo(0.55);
+    s.nivel = 99;
+    expect(chanceDropNormal(s)).toBe(INVENTARIO.chanceDropMax);
+    s.nivel = 1;
+    expect(pityRestante(s)).toBe(INVENTARIO.pitySemDrops);
+
+    for (let i = 0; i < INVENTARIO.pitySemDrops; i++) {
+      expect(rolarDrops(s, { rng: () => 0.999999 })).toHaveLength(0);
+    }
+    expect(s.inventario.semDrops).toBe(INVENTARIO.pitySemDrops);
+    expect(pityRestante(s)).toBe(0);
+    const garantido = rolarDrops(s, { rng: () => 0 });
+    expect(garantido).toHaveLength(1);
+    expect(s.inventario.semDrops).toBe(0);
+  });
+
+  it('BOSS garante ao menos um item raro', () => {
+    const s = criarEstadoInicial();
+    const itens = rolarDrops(s, { boss: true, rng: () => 0 });
+    expect(itens).toHaveLength(INVENTARIO.itensBoss);
+    expect(itens.some((item) => item.raridade === 'raro')).toBe(true);
+    for (const item of itens) {
+      expect(item.nome).toBe(TIPOS_ITEM[item.tipo].nomes[item.raridade]);
+      expect(item.valor).toBeGreaterThan(0);
+    }
+  });
+
+  it('auto-reciclagem vende até a raridade escolhida', () => {
+    const s = criarEstadoInicial();
+    s.ouro = 0;
+    expect(definirAutoReciclar(s, 'incomum')).toBe(true);
+    const comum: ItemInventario = {
+      nome: 'Anel de cobre',
+      tipo: 'anel',
+      raridade: 'comum',
+      valor: 10,
+    };
+    const raro: ItemInventario = {
+      nome: 'Gema estelar',
+      tipo: 'gema',
+      raridade: 'raro',
+      valor: 100,
+    };
+    const r = processarDrops(s, [comum, raro]);
+    expect(r.reciclados).toBe(1);
+    expect(r.ouro).toBe(10);
+    expect(s.ouro).toBe(10);
+    expect(s.inventario.itens).toEqual([raro]);
+    expect(s.inventario.reciclados).toBe(1);
+    expect(s.inventario.ouroReciclado).toBe(10);
+  });
+
+  it('mochila cheia vende o excedente automaticamente', () => {
+    const s = criarEstadoInicial();
+    s.inventario.itens = Array.from({ length: s.inventario.capacidade }, (_, i) => ({
+      nome: `Item ${i}`,
+      tipo: 'pedra' as const,
+      raridade: 'comum' as const,
+      valor: 1,
+    }));
+    const r = processarDrops(s, [
+      { nome: 'Relíquia dos deuses', tipo: 'reliquia', raridade: 'lendario', valor: 500 },
+    ]);
+    expect(r.obtidos).toHaveLength(0);
+    expect(r.processados[0].motivo).toBe('cheio');
+    expect(s.ouro).toBe(30 + 500);
+    expect(s.inventario.itens).toHaveLength(INVENTARIO.slotsIniciais);
+    expect(s.inventario.reciclados).toBe(1);
+  });
+
+  it('vende item e vende tudo creditando o ouro', () => {
+    const s = criarEstadoInicial();
+    s.ouro = 0;
+    s.inventario.itens = [
+      { nome: 'A', tipo: 'moeda', raridade: 'comum', valor: 7 },
+      { nome: 'B', tipo: 'gema', raridade: 'raro', valor: 70 },
+    ];
+    expect(venderItem(s, 5)).toBeNull();
+    expect(venderItem(s, 0)).toBe(7);
+    expect(s.ouro).toBe(7);
+    expect(s.inventario.itens).toHaveLength(1);
+    expect(venderTodosItens(s)).toEqual({ itens: 1, ouro: 70 });
+    expect(s.ouro).toBe(77);
+    expect(s.inventario.itens).toHaveLength(0);
+    expect(s.inventario.reciclados).toBe(2);
+    expect(s.inventario.ouroReciclado).toBe(77);
+  });
+
+  it('filtra e ordena a mochila sem mudar os índices originais', () => {
+    const s = criarEstadoInicial();
+    s.inventario.itens = [
+      { nome: 'A', tipo: 'moeda', raridade: 'comum', valor: 50 },
+      { nome: 'B', tipo: 'gema', raridade: 'raro', valor: 100 },
+      { nome: 'C', tipo: 'pedra', raridade: 'comum', valor: 200 },
+      { nome: 'D', tipo: 'reliquia', raridade: 'lendario', valor: 300 },
+    ];
+    const original = [...s.inventario.itens];
+
+    const recentes = listarInventario(s.inventario, null, 'recente');
+    expect(recentes.map((e) => e.indice)).toEqual([3, 2, 1, 0]);
+
+    const raridade = listarInventario(s.inventario, null, 'raridade');
+    expect(raridade.map((e) => e.indice)).toEqual([3, 1, 2, 0]);
+
+    const valor = listarInventario(s.inventario, null, 'valor');
+    expect(valor.map((e) => e.indice)).toEqual([3, 2, 1, 0]);
+
+    const comuns = listarInventario(s.inventario, 'comum', 'valor');
+    expect(comuns.map((e) => e.indice)).toEqual([2, 0]);
+    expect(comuns.map((e) => e.item.valor)).toEqual([200, 50]);
+    expect(listarInventario(s.inventario, 'mitico' as Raridade)).toHaveLength(4);
+    expect(s.inventario.itens).toEqual(original);
+  });
+
+  it('vende em lote apenas a raridade filtrada', () => {
+    const s = criarEstadoInicial();
+    s.ouro = 0;
+    s.inventario.itens = [
+      { nome: 'A', tipo: 'moeda', raridade: 'comum', valor: 50 },
+      { nome: 'B', tipo: 'gema', raridade: 'raro', valor: 100 },
+      { nome: 'C', tipo: 'pedra', raridade: 'comum', valor: 200 },
+      { nome: 'D', tipo: 'reliquia', raridade: 'lendario', valor: 300 },
+    ];
+    expect(venderItensPorRaridade(s, 'comum')).toEqual({ itens: 2, ouro: 250 });
+    expect(s.ouro).toBe(250);
+    expect(s.inventario.itens.map((e) => e.nome)).toEqual(['B', 'D']);
+    expect(s.inventario.reciclados).toBe(2);
+    expect(s.inventario.ouroReciclado).toBe(250);
+    expect(venderItensPorRaridade(s, 'comum')).toEqual({ itens: 0, ouro: 0 });
+    expect(venderItensPorRaridade(s, 'mitico' as Raridade)).toEqual({
+      itens: 0,
+      ouro: 0,
+    });
+  });
+
+  it('upgrade custa 600, adiciona 50 slots e para no teto', () => {
+    const s = criarEstadoInicial();
+    s.ouro = 1_000_000_000;
+    expect(custoUpgradeInventario(s)).toBe(600);
+    expect(melhorarInventario(s)).toBe(true);
+    expect(s.inventario.capacidade).toBe(100);
+    expect(custoUpgradeInventario(s)).toBe(930);
+    for (let i = 0; i < 100; i++) melhorarInventario(s);
+    expect(s.inventario.capacidade).toBe(INVENTARIO.slotsMax);
+    expect(custoUpgradeInventario(s)).toBeNull();
+    expect(melhorarInventario(s)).toBe(false);
+  });
+
+  it('não amplia a mochila sem ouro', () => {
+    const s = criarEstadoInicial();
+    s.ouro = 0;
+    expect(melhorarInventario(s)).toBe(false);
+    expect(s.inventario.capacidade).toBe(INVENTARIO.slotsIniciais);
+  });
+
+  it('sanitiza inventário corrompido e limita ao teto', () => {
+    const inv = sanitizarInventario({
+      capacidade: 1e9,
+      autoReciclar: 'mitico',
+      reciclados: Number.NaN,
+      ouroReciclado: -5,
+      semDrops: 999,
+      itens: [
+        { nome: '<b>Bom</b>', raridade: 'raro', valor: 12.9 },
+        { nome: 'Ruim', raridade: 'mitico', valor: 10 },
+        { nome: 'NaN', raridade: 'comum', valor: Number.NaN },
+        'nope',
+      ],
+    });
+    expect(inv.capacidade).toBe(INVENTARIO.slotsMax);
+    expect(inv.autoReciclar).toBeNull();
+    expect(inv.reciclados).toBe(0);
+    expect(inv.ouroReciclado).toBe(0);
+    expect(inv.semDrops).toBe(INVENTARIO.pitySemDrops);
+    expect(inv.itens).toHaveLength(2);
+    expect(inv.itens[0]).toEqual({
+      nome: 'bBom/b',
+      tipo: 'moeda',
+      raridade: 'raro',
+      valor: 12,
+    });
+    expect(inv.itens[0].nome).not.toContain('<');
+    expect(inv.itens[0].nome).not.toContain('>');
+    expect(inv.itens[1].valor).toBe(1);
+  });
+
+  it('migra inventário antigo e preserva itens válidos', () => {
+    const s = migrarSave({
+      inventario: {
+        capacidade: 137,
+        autoReciclar: 'raro',
+        itens: [{ nome: 'Cristal', raridade: 'ultra', valor: 50 }],
+      },
+    });
+    expect(s.inventario.capacidade).toBe(150);
+    expect(s.inventario.autoReciclar).toBe('raro');
+    expect(s.inventario.itens).toHaveLength(1);
+    expect(s.inventario.itens[0].raridade).toBe('ultra');
+    expect(s.inventario.itens[0].tipo).toBe('cristal');
+  });
+
+  it('renascer preserva a mochila e a configuração', () => {
+    const s = criarEstadoInicial();
+    s.lugar = 2;
+    s.inventario.capacidade = 100;
+    s.inventario.autoReciclar = 'comum';
+    s.inventario.itens.push({
+      nome: 'Relíquia dos deuses',
+      tipo: 'reliquia',
+      raridade: 'lendario',
+      valor: 400,
+    });
+    expect(renascer(s).possivel).toBe(true);
+    expect(s.inventario.itens).toHaveLength(1);
+    expect(s.inventario.itens[0].raridade).toBe('lendario');
+    expect(s.inventario.capacidade).toBe(100);
+    expect(s.inventario.autoReciclar).toBe('comum');
+  });
+
+  it('valor do item cresce com tipo, raridade e estágio', () => {
+    const comumNv1 = valorItem('moeda', 'comum', 1, 0, () => 0);
+    const lendarioNv1 = valorItem('moeda', 'lendario', 1, 0, () => 0);
+    const comumNv10 = valorItem('moeda', 'comum', 10, 3, () => 0);
+    const gemaNv1 = valorItem('gema', 'comum', 1, 0, () => 0);
+    expect(lendarioNv1).toBeGreaterThan(comumNv1);
+    expect(comumNv10).toBeGreaterThan(comumNv1);
+    expect(gemaNv1).toBeGreaterThan(comumNv1);
+    expect(valorItem('moeda', 'comum', 1, 0, () => 0)).toBeLessThan(
+      valorItem('moeda', 'comum', 1, 0, () => 0.999),
+    );
+  });
+
+  it('definir auto-reciclagem rejeita raridade inválida', () => {
+    const s = criarEstadoInicial();
+    expect(definirAutoReciclar(s, 'lendario')).toBe(true);
+    expect(s.inventario.autoReciclar).toBe('lendario');
+    expect(definirAutoReciclar(s, 'mitico' as unknown as Raridade)).toBe(false);
+    expect(s.inventario.autoReciclar).toBe('lendario');
+    expect(definirAutoReciclar(s, null)).toBe(true);
+    expect(s.inventario.autoReciclar).toBeNull();
   });
 });

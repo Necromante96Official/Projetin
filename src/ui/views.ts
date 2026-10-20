@@ -4,23 +4,36 @@
 
 import {
   EQUIPS,
+  INVENTARIO,
   LUGARES,
   MAX_PECAS,
   MAX_SKILL,
   MAX_TIER,
   ORDEM_SKILLS,
   ORDEM_SLOTS,
+  PRESTIGIO,
+  RARIDADES,
+  RARIDADE_INFO,
   SKILLS,
+  TIPOS_ITEM,
+  bonusPrestigio,
+  brasoesDisponiveis,
+  chanceDropNormal,
+  custoUpgradeInventario,
   ehBoss,
+  listarInventario,
   lugarDe,
   parametrosCombate,
+  pityRestante,
   totalInimigos,
   totalTiersEquip,
   voltaDe,
   type EquipSlot,
   type GameState,
+  type OrdemInventario,
+  type Raridade,
 } from '../core/index.js';
-import { ICONS } from '../render/icons.js';
+import { ICONS, iconeItem } from '../render/icons.js';
 import { fmt } from './dom.js';
 import { pips, stat } from './modal.js';
 
@@ -38,6 +51,9 @@ export function cavaleiroHtml(state: GameState): { titulo: string; html: string 
   const p = parametrosCombate(state);
   const pecas = totalTiersEquip(state);
   const sk = ORDEM_SKILLS.reduce((s, id) => s + (state.skills[id] ?? 0), 0);
+  const b = bonusPrestigio(state);
+  const pctStats = Math.round((b.stats - 1) * 100);
+  const pctOuro = Math.round((b.ouro - 1) * 100);
   return {
     titulo: `🛡️ ${cav.nome}`,
     html: `
@@ -47,6 +63,7 @@ export function cavaleiroHtml(state: GameState): { titulo: string; html: string 
     ${stat('Regeneração', `${p.regen.toFixed(1)}/s`)}
     ${stat('Peças equipadas', `${pecas}/${MAX_PECAS}`)}
     ${stat('Skills', `${sk} níveis`)}
+    ${stat('Brasões', `${fmt(state.brasoes)} (+${pctStats}% atk/vida, +${pctOuro}% ouro)`)}
     <p class="hint" style="margin-top:10px">Ele segura o centro sozinho. Fortaleça com equipamentos e habilidades.</p>
   `,
   };
@@ -124,6 +141,164 @@ export function skillsHtml(state: GameState): { titulo: string; html: string } {
   };
 }
 
+export function renascerHtml(state: GameState): { titulo: string; html: string } {  const ganho = brasoesDisponiveis(state);
+  const b = bonusPrestigio(state);
+  const pctStats = Math.round((b.stats - 1) * 100);
+  const pctOuro = Math.round((b.ouro - 1) * 100);
+  const l = lugarDe(state.lugar);
+  const v = voltaDe(state.lugar);
+  const lugarAtual = `${l.nome}${v > 1 ? ` (V${v})` : ''} • Nv.${state.nivel}/10`;
+  return {
+    titulo: '👑 Renascimento',
+    html: `
+    ${stat('Brasões atuais', fmt(state.brasoes))}
+    ${stat('Renascimentos', fmt(state.renascimentos))}
+    ${stat('Bônus permanente', `+${pctStats}% ataque/vida • +${pctOuro}% ouro`)}
+    ${stat('Progresso atual', lugarAtual)}
+    ${stat('Próximo prêmio', ganho > 0 ? `+${fmt(ganho)} brasões` : `após o boss do ${lugarDe(0).nome}`)}
+    <div class="aviso">
+      <strong>⚠️ O reino recomeça.</strong>
+      Lugar, nível, ouro, equipamentos e habilidades voltam ao início. Você mantém os
+      <b>brasões</b> (bônus permanente), o nome do cavaleiro e as estatísticas da jornada.
+    </div>
+    <div class="modal-actions">
+      ${
+        ganho > 0
+          ? `<button class="btn-primary" data-renascer>👑 Renascer e ganhar ${fmt(ganho)} brasões</button>`
+          : `<button class="btn-primary" disabled>Faltam lugares para renascer</button>`
+      }
+    </div>
+    <p class="hint" style="margin:10px 0 0">Cada brasão dá +${Math.round(PRESTIGIO.bonusStatsPorBrasao * 100)}% de ataque/vida e +${Math.round(PRESTIGIO.bonusOuroPorBrasao * 100)}% de ouro, para sempre.</p>
+  `,
+  };
+}
+
+export interface OpcoesMochila {
+  filtro?: Raridade | null;
+  ordem?: OrdemInventario;
+}
+
+export function mochilaHtml(
+  state: GameState,
+  opcoes: OpcoesMochila = {},
+): { titulo: string; html: string } {
+  const inv = state.inventario;
+  const total = inv.itens.reduce((s, item) => s + item.valor, 0);
+  const custo = custoUpgradeInventario(state);
+  const podeAmpliar = custo != null && state.ouro >= custo;
+  const pct = (n: number): string =>
+    `${n.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
+  const chance = chanceDropNormal(state);
+  const pity = pityRestante(state);
+  const filtro =
+    opcoes.filtro != null && RARIDADE_INFO[opcoes.filtro] ? opcoes.filtro : null;
+  const ordem: OrdemInventario =
+    opcoes.ordem === 'raridade' || opcoes.ordem === 'valor'
+      ? opcoes.ordem
+      : 'recente';
+  const listados = listarInventario(inv, filtro, ordem);
+  const totalListado = listados.reduce((s, entrada) => s + entrada.item.valor, 0);
+  const filtroNome = filtro ? RARIDADE_INFO[filtro].nome : null;
+  const itens = listados
+    .map(({ item, indice }) => {
+      const info = RARIDADE_INFO[item.raridade];
+      const tipo = TIPOS_ITEM[item.tipo]?.nome ?? 'Item';
+      return `
+      <button class="mochila-item raridade-${item.raridade}" data-item="${indice}" title="Vender ${item.nome} (${tipo} ${info.nome.toLowerCase()}) por ${fmt(item.valor)} ouro">
+        <span class="mi-icone" aria-hidden="true">${iconeItem(item.tipo)}</span>
+        <span class="mi-info">
+          <span class="mi-nome">${item.nome}</span>
+          <span class="mi-tipo">${tipo}</span>
+        </span>
+        <span class="mi-rodape">
+          <span class="mi-raridade">${info.simbolo} ${info.nome}</span>
+          <span class="mi-valor">${ICONS.coin} ${fmt(item.valor)}</span>
+        </span>
+      </button>`;
+    })
+    .join('');
+  const autoOpcoes = RARIDADES.map(
+    (r) =>
+      `<option value="${r}" ${inv.autoReciclar === r ? 'selected' : ''}>${RARIDADE_INFO[r].nome} ou abaixo</option>`,
+  ).join('');
+  const filtroOpcoes = RARIDADES.map(
+    (r) =>
+      `<option value="${r}" ${filtro === r ? 'selected' : ''}>${RARIDADE_INFO[r].nome}</option>`,
+  ).join('');
+  const ordemOpcoes = (
+    [
+      ['recente', 'Mais recentes'],
+      ['raridade', 'Raridade'],
+      ['valor', 'Valor'],
+    ] as const
+  )
+    .map(
+      ([valor, nome]) =>
+        `<option value="${valor}" ${ordem === valor ? 'selected' : ''}>${nome}</option>`,
+    )
+    .join('');
+  const chances = (boss: boolean): string =>
+    RARIDADES.map(
+      (r) =>
+        `${RARIDADE_INFO[r].nome} ${pct(boss ? RARIDADE_INFO[r].pesoBoss : RARIDADE_INFO[r].pesoNormal)}`,
+    ).join(' • ');
+  const garantia =
+    pity > 0
+      ? `garantia em ${pity} abate${pity > 1 ? 's' : ''}`
+      : 'próximo abate garantido';
+  const venderFiltro =
+    filtro && listados.length > 0
+      ? `<button class="btn-ghost" data-vender-filtro title="Vender todos os itens exibidos">💰 Vender exibidos (${listados.length} • ${ICONS.coin} ${fmt(totalListado)})</button>`
+      : '';
+  const corpoItens = itens
+    ? `<div class="mochila-grid">${itens}</div>`
+    : inv.itens.length === 0
+      ? '<p class="hint mochila-vazia">Mochila vazia. Derrote hordas para achar itens — o BOSS sempre solta ' +
+        `${INVENTARIO.itensBoss}, ao menos um raro!</p>`
+      : `<p class="hint mochila-vazia">Nenhum item ${filtroNome?.toLowerCase() ?? ''} na mochila. Troque o filtro para ver o restante.</p>`;
+  return {
+    titulo: '🎒 Mochila',
+    html: `
+    <p class="hint">Ouro atual: ${ICONS.coin} <b>${fmt(state.ouro)}</b> — itens caem dos monstros. Clique em um item para vendê-lo.</p>
+    ${stat('Espaços', `${inv.itens.length}/${inv.capacidade}`)}
+    ${stat('Valor guardado', `${ICONS.coin} ${fmt(total)}`)}
+    ${stat('Reciclados', `${fmt(inv.reciclados)} itens • ${ICONS.coin} ${fmt(inv.ouroReciclado)}`)}
+    ${stat('Chance de drop', `${pct(chance * 100)} no Nv.${state.nivel} • ${garantia}`)}
+    <div class="mochila-config">
+      <label for="auto-reciclar">♻ Auto-reciclar</label>
+      <select id="auto-reciclar">
+        <option value="">Desligado</option>
+        ${autoOpcoes}
+      </select>
+      <span class="hint">Vende na hora os itens até a raridade escolhida (e também quando a mochila enche).</span>
+    </div>
+    <div class="mochila-controles">
+      <div class="mochila-campo">
+        <label for="filtro-raridade">Filtrar</label>
+        <select id="filtro-raridade">
+          <option value="">Todas</option>
+          ${filtroOpcoes}
+        </select>
+      </div>
+      <div class="mochila-campo">
+        <label for="ordem-mochila">Ordenar</label>
+        <select id="ordem-mochila">${ordemOpcoes}</select>
+      </div>
+      <span class="mochila-contagem">${listados.length} de ${inv.itens.length} itens • ${ICONS.coin} ${fmt(totalListado)}</span>
+    </div>
+    <div class="mochila-acoes">
+      <button class="btn-primary" data-upgrade ${podeAmpliar ? '' : 'disabled'}>
+        ${custo == null ? 'Mochila no máximo' : `Ampliar +${INVENTARIO.passoSlots} slots — ${ICONS.coin} ${fmt(custo)}`}
+      </button>
+      <button class="btn-ghost" data-vender-todos ${inv.itens.length === 0 ? 'disabled' : ''}>💰 Vender tudo (${ICONS.coin} ${fmt(total)})</button>
+      ${venderFiltro}
+    </div>
+    ${corpoItens}
+    <p class="hint" style="margin-top:12px">Normal (${pct(chance * 100)} por abate): ${chances(false)}.<br>BOSS (${INVENTARIO.itensBoss} itens, mínimo raro): ${chances(true)}.</p>
+  `,
+  };
+}
+
 export function cronicasHtml(): { titulo: string; html: string } {
   const ul = document.getElementById('log');
   const itens = ul
@@ -143,6 +318,11 @@ export function ajudaHtml(): { titulo: string; html: string } {
     <div class="linha-stat"><span>Hordas</span><b>15× o nível, vêm até você</b></div>
     <div class="linha-stat"><span>Nv.10</span><b>sempre tem BOSS gigante</b></div>
     <div class="linha-stat"><span>Equip/Skills</span><b>botões da direita, com ouro</b></div>
+    <div class="linha-stat"><span>Atalho</span><b>⚡ compra as melhorias mais baratas</b></div>
+    <div class="linha-stat"><span>Renascimento</span><b>troca progresso por brasões permanentes</b></div>
+    <div class="linha-stat"><span>Mochila</span><b>itens caem dos monstros e viram ouro</b></div>
+    <div class="linha-stat"><span>Drops</span><b>chance cresce com o nível; após 10 abates secos vem a garantia</b></div>
+    <div class="linha-stat"><span>BOSS</span><b>sempre solta 3 itens, ao menos um raro</b></div>
     <div class="linha-stat"><span>Derrota</span><b>mantém o ouro e tenta de novo</b></div>
     <p class="hint" style="margin-top:10px">100% automático. O jogo salva sozinho, inclusive offline.</p>
   `,

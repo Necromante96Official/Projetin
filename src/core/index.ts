@@ -8,4 +8,6 @@ export * from './state.js';
 export * from './combat.js';
 export * from './horde.js';
 export * from './shop.js';
+export * from './prestige.js';
+export * from './inventory.js';
 export * from './offline.js';

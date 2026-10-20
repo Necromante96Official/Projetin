@@ -6,23 +6,37 @@ import {
   avancarNivel,
   calcularGanhoOffline,
   comprarEquip,
+  comprarMelhoriasAcessiveis,
   comprarSkill,
   criarEstadoInicial,
+  definirAutoReciclar,
+  indiceRaridade,
   limiteSimultaneos,
   lugarDe,
+  melhorarInventario,
   ouroPorMinuto,
   parametrosCombate,
+  processarDrops,
+  renascer,
+  rolarDrops,
   simularHorda,
+  venderItem,
+  venderItensPorRaridade,
+  venderTodosItens,
   EQUIPS,
   MAX_PECAS,
+  RARIDADE_INFO,
   SKILLS,
   totalTiersEquip,
   type EquipSlot,
   type GameState,
+  type ItemInventario,
+  type OrdemInventario,
+  type Raridade,
   type SkillId,
 } from '../core/index.js';
 import { Arena, type ArenaResult } from '../engine/arena.js';
-import { hidratarIcones } from '../render/icons.js';
+import { hidratarIcones, iconeItem } from '../render/icons.js';
 import { el, fmt, formatTempo } from './dom.js';
 import { Hud } from './hud.js';
 import { LogStore } from './log.js';
@@ -34,6 +48,8 @@ import {
   cronicasHtml,
   equipamentosHtml,
   lugarHtml,
+  mochilaHtml,
+  renascerHtml,
   skillsHtml,
 } from './views.js';
 
@@ -46,12 +62,17 @@ export class GameController {
   private logs: LogStore;
   private hud = new Hud();
   private tempoRestante = DESCANSO_MS / 1000;
+  private filtroMochila: Raridade | null = null;
+  private ordemMochila: OrdemInventario = 'recente';
   private emBatalha = false;
   private hpAtual: number | null = null;
   private runSeq = 0;
   private rendaTimer: number | undefined;
   private autoTimer: number | undefined;
   private readonly aoSair = (): void => salvar(this.state);
+  private readonly aoEsconder = (): void => {
+    if (document.visibilityState === 'hidden') salvar(this.state);
+  };
 
   constructor(canvas: HTMLCanvasElement) {
     this.state = carregar();
@@ -62,55 +83,232 @@ export class GameController {
 
   // ---------- modais ----------
 
-  abrirDetalhesCavaleiro(): void {
+  private renderCavaleiro(abrir: boolean): void {
     const { titulo, html } = cavaleiroHtml(this.state);
-    this.modal.abrir(titulo, html, 'cavaleiro');
+    if (abrir) this.modal.abrir(titulo, html, 'cavaleiro');
+    else this.modal.atualizar(titulo, html, 'cavaleiro');
   }
 
-  abrirDetalhesLugar(): void {
+  private renderLugar(abrir: boolean): void {
     const { titulo, html } = lugarHtml(this.state);
-    this.modal.abrir(titulo, html, 'lugar');
+    if (abrir) this.modal.abrir(titulo, html, 'lugar');
+    else this.modal.atualizar(titulo, html, 'lugar');
   }
 
-  abrirEquipamentos(): void {
+  private renderEquipamentos(abrir: boolean): void {
     const { titulo, html } = equipamentosHtml(this.state);
-    this.modal.abrir(titulo, html, 'equip');
+    if (abrir) this.modal.abrir(titulo, html, 'equip');
+    else this.modal.atualizar(titulo, html, 'equip');
     this.modal.corpo.querySelectorAll('[data-eq]').forEach((btn) => {
       (btn as HTMLElement).onclick = () => {
         const slot = (btn as HTMLElement).dataset.eq as EquipSlot;
         if (comprarEquip(this.state, slot)) {
           this.logs.log(`🛒 Comprou: ${EQUIPS[slot].nome}.`, 'buy');
           this.persistirERender();
-          this.abrirEquipamentos();
         }
       };
     });
   }
 
-  abrirSkills(): void {
+  private renderSkills(abrir: boolean): void {
     const { titulo, html } = skillsHtml(this.state);
-    this.modal.abrir(titulo, html, 'skills');
+    if (abrir) this.modal.abrir(titulo, html, 'skills');
+    else this.modal.atualizar(titulo, html, 'skills');
     this.modal.corpo.querySelectorAll('[data-sk]').forEach((btn) => {
       (btn as HTMLElement).onclick = () => {
         const id = (btn as HTMLElement).dataset.sk as SkillId;
         if (comprarSkill(this.state, id)) {
           this.logs.log(`🛒 Skill: ${SKILLS[id].nome} Nv.${this.state.skills[id]}.`, 'buy');
           this.persistirERender();
-          this.abrirSkills();
         }
       };
     });
   }
 
+  private renderRenascer(abrir: boolean): void {
+    const { titulo, html } = renascerHtml(this.state);
+    if (abrir) this.modal.abrir(titulo, html, 'renascer');
+    else this.modal.atualizar(titulo, html, 'renascer');
+    this.modal.corpo.querySelectorAll('[data-renascer]').forEach((btn) => {
+      (btn as HTMLElement).onclick = () => this.executarRenascimento();
+    });
+  }
+
+  private renderMochila(abrir: boolean): void {
+    const { titulo, html } = mochilaHtml(this.state, {
+      filtro: this.filtroMochila,
+      ordem: this.ordemMochila,
+    });
+    if (abrir) this.modal.abrir(titulo, html, 'mochila');
+    else this.modal.atualizar(titulo, html, 'mochila');
+
+    const corpo = this.modal.corpo;
+    const upgrade = corpo.querySelector<HTMLElement>('[data-upgrade]');
+    if (upgrade) {
+      upgrade.onclick = () => {
+        if (melhorarInventario(this.state)) {
+          this.logs.log(
+            `🎒 Mochila ampliada para ${this.state.inventario.capacidade} espaços.`,
+            'buy',
+          );
+          this.persistirERender();
+        }
+      };
+    }
+
+    const select = corpo.querySelector<HTMLSelectElement>('#auto-reciclar');
+    if (select) {
+      select.onchange = () => {
+        const raridade = select.value === '' ? null : (select.value as Raridade);
+        if (!definirAutoReciclar(this.state, raridade)) return;
+        this.logs.log(
+          raridade
+            ? `♻ Auto-reciclagem: ${RARIDADE_INFO[raridade].nome} ou abaixo.`
+            : '♻ Auto-reciclagem desligada.',
+          'info',
+        );
+        this.persistirERender();
+      };
+    }
+
+    const filtroSelect = corpo.querySelector<HTMLSelectElement>('#filtro-raridade');
+    if (filtroSelect) {
+      filtroSelect.onchange = () => {
+        this.filtroMochila =
+          filtroSelect.value === '' ? null : (filtroSelect.value as Raridade);
+        this.render();
+      };
+    }
+
+    const ordemSelect = corpo.querySelector<HTMLSelectElement>('#ordem-mochila');
+    if (ordemSelect) {
+      ordemSelect.onchange = () => {
+        this.ordemMochila = ordemSelect.value as OrdemInventario;
+        this.render();
+      };
+    }
+
+    corpo.querySelectorAll<HTMLElement>('[data-item]').forEach((btn) => {
+      btn.onclick = () => {
+        const i = Number(btn.dataset.item);
+        const item = this.state.inventario.itens[i];
+        if (!item) return;
+        const valor = venderItem(this.state, i);
+        if (valor != null) {
+          this.logs.log(
+            `💰 Vendeu ${item.nome} (${RARIDADE_INFO[item.raridade].nome}) por ${fmt(valor)} ouro.`,
+            'buy',
+          );
+          this.persistirERender();
+        }
+      };
+    });
+
+    const todos = corpo.querySelector<HTMLElement>('[data-vender-todos]');
+    if (todos) {
+      todos.onclick = () => {
+        const vendidos = venderTodosItens(this.state);
+        if (vendidos.itens > 0) {
+          this.logs.log(
+            `💰 Vendeu ${vendidos.itens} ${vendidos.itens > 1 ? 'itens' : 'item'} por ${fmt(vendidos.ouro)} ouro.`,
+            'buy',
+          );
+          this.persistirERender();
+        }
+      };
+    }
+
+    const porFiltro = corpo.querySelector<HTMLElement>('[data-vender-filtro]');
+    if (porFiltro && this.filtroMochila) {
+      const raridade = this.filtroMochila;
+      porFiltro.onclick = () => {
+        const vendidos = venderItensPorRaridade(this.state, raridade);
+        if (vendidos.itens > 0) {
+          const quantidade = `${vendidos.itens} ${vendidos.itens > 1 ? 'itens' : 'item'}`;
+          this.logs.log(
+            `💰 Vendeu ${quantidade} de raridade ${RARIDADE_INFO[raridade].nome.toLowerCase()} por ${fmt(vendidos.ouro)} ouro.`,
+            'buy',
+          );
+          this.persistirERender();
+        }
+      };
+    }
+  }
+
+  abrirDetalhesCavaleiro(): void {
+    this.renderCavaleiro(true);
+  }
+
+  abrirDetalhesLugar(): void {
+    this.renderLugar(true);
+  }
+
+  abrirEquipamentos(): void {
+    this.renderEquipamentos(true);
+  }
+
+  abrirSkills(): void {
+    this.renderSkills(true);
+  }
+
+  abrirRenascer(): void {
+    this.renderRenascer(true);
+  }
+
+  abrirMochila(): void {
+    this.renderMochila(true);
+  }
+
   abrirCronicas(): void {
     const { titulo, html } = cronicasHtml();
-    this.modal.abrir(titulo, html, 'cronicas');
+    if (this.modal.chave === 'cronicas') this.modal.atualizar(titulo, html, 'cronicas');
+    else this.modal.abrir(titulo, html, 'cronicas');
     this.logs.marcarLidas();
   }
 
   abrirAjuda(): void {
     const { titulo, html } = ajudaHtml();
     this.modal.abrir(titulo, html, 'ajuda');
+  }
+
+  private executarRenascimento(): void {
+    const resultado = renascer(this.state);
+    if (!resultado.possivel) {
+      this.logs.log(
+        `👑 Renascer libera após vencer o boss do ${lugarDe(0).nome}. Continue avançando!`,
+        'info',
+      );
+      return;
+    }
+    this.runSeq++;
+        this.emBatalha = false;
+        this.hpAtual = null;
+        this.filtroMochila = null;
+        this.ordemMochila = 'recente';
+        this.tempoRestante = DESCANSO_MS / 1000;
+    this.resetarBatalhaVisual();
+    this.modal.fechar();
+    this.logs.flash(`👑 Renascimento! +${fmt(resultado.ganhos)} brasões`, true);
+    this.logs.log(
+      `👑 O reino renasceu pela ${this.state.renascimentos}ª vez: +${fmt(resultado.ganhos)} brasões (total ${fmt(resultado.total)}).`,
+      'info',
+    );
+    salvar(this.state);
+    this.descansoAtual();
+    this.render();
+  }
+
+  private comprarAcessivel(): void {
+    const resultado = comprarMelhoriasAcessiveis(this.state);
+    if (resultado.compras <= 0) {
+      this.logs.log('⚡ Nenhuma melhoria acessível com o ouro atual.', 'info');
+      return;
+    }
+    this.logs.log(
+      `⚡ Comprou ${resultado.compras} melhoria${resultado.compras > 1 ? 's' : ''} por ${fmt(resultado.gasto)} ouro.`,
+      'buy',
+    );
+    this.persistirERender();
   }
 
   // ---------- render ----------
@@ -123,8 +321,12 @@ export class GameController {
   render(): void {
     this.hud.render(this.state, { onSlotClick: () => this.abrirEquipamentos() }, this.hpAtual);
     const chave = this.modal.chave;
-    if (chave === 'cavaleiro') this.abrirDetalhesCavaleiro();
-    else if (chave === 'lugar') this.abrirDetalhesLugar();
+    if (chave === 'cavaleiro') this.renderCavaleiro(false);
+    else if (chave === 'lugar') this.renderLugar(false);
+    else if (chave === 'equip') this.renderEquipamentos(false);
+    else if (chave === 'skills') this.renderSkills(false);
+    else if (chave === 'renascer') this.renderRenascer(false);
+    else if (chave === 'mochila') this.renderMochila(false);
   }
 
   /** Mantém barra e número de HP coerentes durante a luta (dano + regeneração). */
@@ -149,12 +351,29 @@ export class GameController {
 
   // ---------- batalha ----------
 
+  private iniciarBatalhaVisual(boss: boolean): void {
+    const fill = el('timer-fill') as HTMLElement;
+    fill.classList.add('batalha');
+    fill.style.width = '100%';
+    el('timer').textContent = boss ? '☠ boss em andamento...' : '⚔ horda em andamento...';
+  }
+
+  private resetarBatalhaVisual(): void {
+    const fill = el('timer-fill') as HTMLElement;
+    fill.classList.remove('batalha');
+    fill.style.width = '0%';
+  }
+
   private async iniciarRun(): Promise<void> {
     if (this.emBatalha) return;
     this.emBatalha = true;
     const runId = ++this.runSeq;
     const ativo = (): boolean => runId === this.runSeq;
     let vigia: number | undefined;
+    let lootItens = 0;
+    let lootReciclados = 0;
+    let lootOuro = 0;
+    const lootMelhor = { item: null as ItemInventario | null };
     try {
       const sim = simularHorda(this.state);
       const horda = sim.horda;
@@ -165,7 +384,7 @@ export class GameController {
       this.atualizarVida(P.hp, P.hp);
       (el('horda-fill') as HTMLElement).style.width = '0%';
       el('horda-txt').textContent = horda.boss ? 'BOSS' : `0/${horda.total}`;
-      el('timer').textContent = horda.boss ? '☠ boss...' : 'horda em andamento...';
+      this.iniciarBatalhaVisual(horda.boss);
 
       const res = await Promise.race([
         this.arena.lutarHorda({
@@ -185,6 +404,23 @@ export class GameController {
             if (!ativo()) return;
             this.ganharOuro(def.gold);
             this.state.abates += 1;
+            const itens = rolarDrops(this.state, { boss: def.boss });
+            if (itens.length > 0) {
+              const resumo = processarDrops(this.state, itens);
+              lootItens += resumo.obtidos.length;
+              lootReciclados += resumo.reciclados;
+              lootOuro += resumo.ouro;
+              for (const item of resumo.obtidos) {
+                if (
+                  lootMelhor.item === null ||
+                  indiceRaridade(item.raridade) > indiceRaridade(lootMelhor.item.raridade) ||
+                  (item.raridade === lootMelhor.item.raridade &&
+                    item.valor > lootMelhor.item.valor)
+                ) {
+                  lootMelhor.item = item;
+                }
+              }
+            }
             el('ouro').textContent = fmt(this.state.ouro);
           },
           onPlayerHp: (hp, max) => {
@@ -195,6 +431,9 @@ export class GameController {
             if (!ativo()) return;
             (el('horda-fill') as HTMLElement).style.width = `${Math.round((k / total) * 100)}%`;
             el('horda-txt').textContent = `${k}/${total}`;
+            el('timer').textContent = horda.boss
+              ? '☠ boss em andamento...'
+              : `⚔ horda em andamento — ${k}/${total}`;
           },
         }),
         new Promise<ArenaResult>((resolve) => {
@@ -257,6 +496,31 @@ export class GameController {
           'loss',
         );
       }
+
+      const melhorLoot = lootMelhor.item;
+      const lootNotavel =
+        horda.boss ||
+        (melhorLoot != null &&
+          indiceRaridade(melhorLoot.raridade) >= indiceRaridade('raro'));
+      if (lootNotavel && (lootItens > 0 || lootReciclados > 0)) {
+        const partes: string[] = [];
+        if (lootItens > 0) {
+          partes.push(
+            `${lootItens} item${lootItens > 1 ? 's' : ''} guardado${lootItens > 1 ? 's' : ''}`,
+          );
+        }
+        if (lootReciclados > 0) {
+          partes.push(
+            `${lootReciclados} reciclado${lootReciclados > 1 ? 's' : ''} (+${fmt(lootOuro)} ouro)`,
+          );
+        }
+        if (melhorLoot) {
+          partes.push(
+            `melhor: ${iconeItem(melhorLoot.tipo)} ${melhorLoot.nome} (${RARIDADE_INFO[melhorLoot.raridade].nome})`,
+          );
+        }
+        this.logs.log(`🎁 ${partes.join(' • ')}.`, 'info');
+      }
     } catch (e) {
       console.error('[game] erro na run (recuperado):', e);
       if (ativo()) this.logs.log('Sistema: erro inesperado na batalha; seguindo.', 'info');
@@ -267,6 +531,7 @@ export class GameController {
         this.emBatalha = false;
         this.hpAtual = null;
         this.tempoRestante = DESCANSO_MS / 1000;
+        this.resetarBatalhaVisual();
         salvar(this.state);
         this.descansoAtual();
         this.render();
@@ -278,6 +543,7 @@ export class GameController {
 
   boot(): void {
     window.addEventListener('pagehide', this.aoSair);
+    document.addEventListener('visibilitychange', this.aoEsconder);
 
     el('lutar-agora').onclick = () => {
       if (this.emBatalha) return;
@@ -285,13 +551,14 @@ export class GameController {
       void this.iniciarRun(); // funciona mesmo com o auto desligado
     };
     el('reset').onclick = () => {
-      if (confirm('Apagar progresso e recomeçar o reino?')) {
+      if (confirm('Apagar TODO o progresso (incluindo brasões) e recomeçar o reino?')) {
         this.runSeq++; // invalida callbacks/watchdog da run em andamento
         apagarSave();
         this.state = criarEstadoInicial();
         this.emBatalha = false;
         this.hpAtual = null;
         this.tempoRestante = DESCANSO_MS / 1000;
+        this.resetarBatalhaVisual();
         this.logs.limpar();
         this.logs.log('👑 Novo reino fundado! Boa sorte, regente.', 'info');
         salvar(this.state);
@@ -314,6 +581,9 @@ export class GameController {
     acionavel('card-lugar', () => this.abrirDetalhesLugar());
     el('btn-equip').onclick = () => this.abrirEquipamentos();
     el('btn-skills').onclick = () => this.abrirSkills();
+    el('btn-mochila').onclick = () => this.abrirMochila();
+    el('btn-renascer').onclick = () => this.abrirRenascer();
+    el('btn-auto-comprar').onclick = () => this.comprarAcessivel();
     el('btn-cronicas').onclick = () => this.abrirCronicas();
     el('btn-ajuda').onclick = () => this.abrirAjuda();
 
@@ -366,6 +636,7 @@ export class GameController {
 
   destroy(): void {
     window.removeEventListener('pagehide', this.aoSair);
+    document.removeEventListener('visibilitychange', this.aoEsconder);
     window.clearInterval(this.autoTimer);
     window.clearInterval(this.rendaTimer);
   }

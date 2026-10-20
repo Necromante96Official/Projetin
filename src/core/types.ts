@@ -4,6 +4,20 @@
 export type EquipSlot = 'elmo' | 'camisa' | 'calcas' | 'botas' | 'arma' | 'escudo';
 export type SkillId = 'afiado' | 'vigor' | 'regen' | 'rapidez' | 'saque';
 export type BiomaId = 'campo' | 'floresta' | 'caverna' | 'neve' | 'castelo';
+export type Raridade = 'comum' | 'incomum' | 'raro' | 'ultra' | 'lendario';
+export type ItemTipo =
+  | 'moeda'
+  | 'anel'
+  | 'colar'
+  | 'luva'
+  | 'pena'
+  | 'cantil'
+  | 'osso'
+  | 'pedra'
+  | 'broche'
+  | 'cristal'
+  | 'reliquia'
+  | 'gema';
 
 export interface EquipTier {
   nome: string;
@@ -15,6 +29,14 @@ export interface EquipTier {
 export interface EquipDef {
   nome: string;
   tiers: EquipTier[];
+}
+
+export interface ItemTipoDef {
+  nome: string;
+  /** Um nome por raridade, do comum ao lendário. */
+  nomes: Record<Raridade, string>;
+  valorMult: number;
+  peso: number;
 }
 
 export interface SkillDef {
@@ -53,6 +75,24 @@ export interface Cavaleiro {
   hp: number;
 }
 
+export interface ItemInventario {
+  nome: string;
+  tipo: ItemTipo;
+  raridade: Raridade;
+  valor: number;
+}
+
+export interface Inventario {
+  capacidade: number;
+  itens: ItemInventario[];
+  /** vende na hora os itens desta raridade ou abaixo (null = desligado) */
+  autoReciclar: Raridade | null;
+  reciclados: number;
+  ouroReciclado: number;
+  /** abates seguidos sem drop; no limite, o próximo é garantido */
+  semDrops: number;
+}
+
 export interface GameState {
   ouro: number;
   lugar: number; // índice absoluto (lugarDe/voltaDe derivam lugar + volta)
@@ -63,11 +103,19 @@ export interface GameState {
   equip: Record<EquipSlot, number>;
   skills: Record<SkillId, number>;
   cavaleiro: Cavaleiro;
+  /** brasões acumulados em renascimentos (bônus permanente) */
+  brasoes: number;
+  /** quantas vezes o reino renasceu */
+  renascimentos: number;
+  inventario: Inventario;
   updatedAt: number;
 }
 
 /** Save cru vindo do localStorage: pode conter modelo antigo ou corrompido. */
-export type SaveCru = Omit<Partial<GameState>, 'cavaleiro' | 'equip' | 'skills'> & {
+export type SaveCru = Omit<
+  Partial<GameState>,
+  'cavaleiro' | 'equip' | 'skills' | 'inventario'
+> & {
   nivelInimigo?: unknown;
   herois?: Array<{ nome?: unknown; atk?: unknown; hp?: unknown }>;
   quartel?: unknown;
@@ -77,6 +125,7 @@ export type SaveCru = Omit<Partial<GameState>, 'cavaleiro' | 'equip' | 'skills'>
   cavaleiro?: Partial<Cavaleiro> | unknown;
   equip?: Partial<Record<EquipSlot, unknown>>;
   skills?: Partial<Record<SkillId, unknown>>;
+  inventario?: unknown;
   [extra: string]: unknown;
 };
 
@@ -124,5 +173,29 @@ export interface AvancoNivel {
 
 export interface GanhoOffline {
   segundosFora: number;
+  ouro: number;
+}
+
+export interface RenascimentoResultado {
+  possivel: boolean;
+  ganhos: number;
+  total: number;
+}
+
+export interface CompraAuto {
+  compras: number;
+  gasto: number;
+}
+
+export interface DropProcessado {
+  item: ItemInventario;
+  vendido: boolean;
+  motivo: 'auto' | 'cheio' | null;
+}
+
+export interface ResultadoDrops {
+  obtidos: ItemInventario[];
+  processados: DropProcessado[];
+  reciclados: number;
   ouro: number;
 }

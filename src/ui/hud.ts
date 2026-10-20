@@ -7,15 +7,22 @@ import {
   MAX_TIER,
   ORDEM_SKILLS,
   ORDEM_SLOTS,
+  RARIDADE_INFO,
+  TIPOS_ITEM,
+  brasoesDisponiveis,
+  chanceDropNormal,
+  custoProximaMelhoria,
   ehBoss,
+  indiceRaridade,
   lugarDe,
   parametrosCombate,
   simularHorda,
   totalTiersEquip,
   voltaDe,
   type GameState,
+  type ItemInventario,
 } from '../core/index.js';
-import { ICONS, hidratarIcones } from '../render/icons.js';
+import { ICONS, hidratarIcones, iconeItem } from '../render/icons.js';
 import { el, fmt } from './dom.js';
 import { pips } from './modal.js';
 import { ICONE_SLOT } from './views.js';
@@ -38,6 +45,7 @@ export class Hud {
     const chave = [
       state.lugar,
       state.nivel,
+      state.brasoes,
       ...ORDEM_SLOTS.map((s) => state.equip[s] ?? 0),
       ...ORDEM_SKILLS.map((s) => state.skills[s] ?? 0),
       cav.atk,
@@ -67,6 +75,19 @@ export class Hud {
     el('vitorias').textContent = fmt(state.vitorias);
     el('derrotas').textContent = fmt(state.derrotas || 0);
 
+    const renascerLabel = el('renascer-label');
+    renascerLabel.textContent =
+      state.brasoes > 0 ? `👑 ${fmt(state.brasoes)} brasões` : '👑 Renascer';
+    el('renascer-dot').classList.toggle('hidden', brasoesDisponiveis(state) <= 0);
+
+    const btnAuto = el('btn-auto-comprar') as HTMLButtonElement;
+    const proximo = custoProximaMelhoria(state);
+    const podeAuto = proximo != null && proximo <= state.ouro;
+    btnAuto.disabled = !podeAuto;
+    btnAuto.textContent = podeAuto
+      ? `⚡ Comprar acessível (${fmt(proximo as number)})`
+      : '⚡ Comprar acessível';
+
     el('nome-cavaleiro').textContent = `${cav.nome}`;
     el('poder-time').innerHTML = `${ICONS.swords} ${fmt(time.atk)} atk • ${ICONS.heart} ${fmt(time.hp)} vida`;
     const pecas = totalTiersEquip(state);
@@ -80,6 +101,34 @@ export class Hud {
 
     el('bioma').textContent = `📍 ${l.nome}${v > 1 ? ` — Volta ${v}` : ''}`;
     el('versus-nivel').textContent = boss ? '☠ BOSS' : `Nv. ${state.nivel}/10`;
+
+    const inv = state.inventario;
+    let melhor: ItemInventario | null = null;
+    for (const item of inv.itens) {
+      if (
+        melhor == null ||
+        indiceRaridade(item.raridade) > indiceRaridade(melhor.raridade) ||
+        (item.raridade === melhor.raridade && item.valor > melhor.valor)
+      ) {
+        melhor = item;
+      }
+    }
+    const chance = (chanceDropNormal(state) * 100).toLocaleString('pt-BR', {
+      maximumFractionDigits: 1,
+    });
+    el('mochila-contador').textContent = `${inv.itens.length}/${inv.capacidade}`;
+    (el('mochila-fill') as HTMLElement).style.width =
+      `${inv.capacidade > 0 ? (inv.itens.length / inv.capacidade) * 100 : 0}%`;
+    const resumo = el('mochila-resumo');
+    if (!melhor) {
+      resumo.textContent = `Vazia — ${chance}% de drop por abate.`;
+    } else {
+      const info = RARIDADE_INFO[melhor.raridade];
+      const tipo = TIPOS_ITEM[melhor.tipo]?.nome ?? 'Item';
+      resumo.innerHTML = `Melhor: <span class="mochila-melhor raridade-${melhor.raridade}">${iconeItem(melhor.tipo)} ${melhor.nome}</span><br><span class="mi-tipo">${tipo} • ${info.nome}${
+        inv.autoReciclar ? ` • ♻ até ${RARIDADE_INFO[inv.autoReciclar].nome}` : ''
+      }</span>`;
+    }
 
     const porAbate = h.inimigos[0]?.gold ?? 0;
     el('previsao').innerHTML = `
