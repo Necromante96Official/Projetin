@@ -5,17 +5,22 @@ import {
   MAX_LUGAR,
   MAX_SKILL,
   MAX_TIER,
+  MISSOES,
   ORDEM_CONQUISTAS,
+  ORDEM_MISSOES,
   ORDEM_SKILLS,
   ORDEM_SLOTS,
   PRESTIGIO,
 } from './data.js';
 import { criarInventarioInicial, sanitizarInventario } from './inventory.js';
+import { missoesVazias } from './missions.js';
 import type {
   ConquistaId,
   EquipSlot,
   Estatisticas,
   GameState,
+  MissaoTipo,
+  MissoesDiarias,
   SaveCru,
   SkillId,
 } from './types.js';
@@ -67,6 +72,57 @@ const conquistasSeguras = (v: unknown): ConquistaId[] => {
   ];
 };
 
+const missoesSeguras = (v: unknown): MissoesDiarias => {
+  const base = missoesVazias();
+  if (!v || typeof v !== 'object') return base;
+  const raw = v as Record<string, unknown>;
+  const data =
+    typeof raw.data === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw.data)
+      ? raw.data
+      : '';
+  const validas = new Set<string>(ORDEM_MISSOES);
+  const tipos = Array.isArray(raw.tipos)
+    ? [
+        ...new Set(
+          raw.tipos.filter(
+            (tipo): tipo is MissaoTipo =>
+              typeof tipo === 'string' && validas.has(tipo),
+          ),
+        ),
+      ]
+    : [];
+  const progressoRaw =
+    raw.progresso && typeof raw.progresso === 'object'
+      ? (raw.progresso as Record<string, unknown>)
+      : {};
+  const progresso = { ...base.progresso };
+  for (const tipo of ORDEM_MISSOES) {
+    progresso[tipo] = Math.min(
+      MISSOES[tipo].meta,
+      inteiroSeguro(progressoRaw[tipo], 0),
+    );
+  }
+  const concluidas = Array.isArray(raw.concluidas)
+    ? [
+        ...new Set(
+          raw.concluidas.filter(
+            (tipo): tipo is MissaoTipo =>
+              typeof tipo === 'string' &&
+              validas.has(tipo) &&
+              tipos.includes(tipo as MissaoTipo),
+          ),
+        ),
+      ]
+    : [];
+  return {
+    data,
+    tipos,
+    progresso,
+    concluidas,
+    bonusPago: raw.bonusPago === true,
+  };
+};
+
 const nomeSeguro = (v: unknown): string => {
   if (typeof v !== 'string') return 'Sor Aria';
   const limpo = v
@@ -109,6 +165,7 @@ export function criarEstadoInicial(): GameState {
       maiorNivel: 1,
     },
     conquistas: [],
+    missoes: missoesVazias(),
     updatedAt: Date.now(),
   };
 }
@@ -180,6 +237,7 @@ export function migrarSave(state: SaveCru | null | undefined): GameState {
   );
   s.estatisticas = est;
   s.conquistas = conquistasSeguras((state as SaveCru).conquistas);
+  s.missoes = missoesSeguras((state as SaveCru).missoes);
 
   // prédios antigos viram reembolso em ouro (sistema removido)
   let refund = 0;

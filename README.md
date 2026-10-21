@@ -28,11 +28,16 @@ Mini protótipo jogável, em português, estilo minimalista limpo, pronto para G
    item, todos ou só os filtrados, configure a **auto-reciclagem** e amplie de 50 em
    50 slots até 1000. Mochila cheia vende o excedente sozinha. Renascer preserva a mochila.
 7. 🔊 **Som procedural** (Web Audio, sem arquivos): efeitos para cliques, compras,
-   golpes, drops, raridades, bosses, vitória/derrota, level up, prestígio, conquistas
-   e ambiente por bioma. O botão **Som** no topo silencia/reativa e a escolha fica salva.
+   golpes, drops, raridades, bosses, vitória/derrota, level up, prestígio, conquistas,
+   missões e ambiente por bioma. O botão **Som** no topo silencia/reativa e a escolha
+   fica salva.
 8. 🏅 **Conquistas**: 20 metas permanentes (vitórias, abates, bosses, elites, itens,
    equipamento, skills, renascimentos e ouro acumulado) pagam ouro e brasões uma única
    vez. O botão **Conquistas** mostra progresso, recompensas e recordes da jornada.
+9. 🎯 **Missões diárias**: 3 objetivos sorteados por dia entre abates, vitórias,
+   elites, bosses, drops, itens raros, compras, vendas e ouro ganho. Cada missão paga
+   ouro ao ser cumprida; completar as 3 rende um bônus de 300 ouro + 1 brasão. O ciclo
+   renova à meia-noite (horário local) e o progresso aparece no card e no modal.
 
 ## 🏅 Conquistas e recordes
 
@@ -40,6 +45,16 @@ As conquistas não resetam no renascimento. Cada uma tem uma meta, uma barra de 
 e uma recompensa única em ouro ou brasões; ao desbloquear, o jogo toca um som, registra
 nas Crônicas e paga automaticamente. O modal também guarda recordes como ouro total
 acumulado, chefes/elites derrotados, itens encontrados, lendários e maior progresso.
+
+## 🎯 Missões diárias
+
+Todo dia o jogo sorteia 3 objetivos diferentes, de forma determinística a partir da
+data local. O progresso é automático: lutar, vencer, derrotar elites/bosses, coletar
+itens, comprar melhorias, vender itens e ganhar ouro contam para o objetivo ativo.
+Cada missão paga ouro ao ser concluída e as recompensas não se repetem; completar as
+três libera **+300 ouro e +1 brasão**. À meia-noite (horário local) as missões são
+substituídas e o progresso recomeça. O card no painel mostra a próxima meta e o modal
+**Missões** lista as três com barras de progresso.
 
 ## 🎁 Drops e raridades
 
@@ -59,7 +74,7 @@ BOSS sempre solta pelo menos um item raro.
 Mapa completo em `docs/ARQUITETURA.md`. Resumo:
 
 ```text
-src/core/     regras puras (tipos, balance, save, combate, horda, loja, inventário, offline, prestígio, conquistas)
+src/core/     regras puras (tipos, balance, save, combate, horda, loja, inventário, offline, prestígio, conquistas, missões)
 src/engine/   tempo real (Arena + cenário)
 src/audio/    efeitos e ambiente procedurais (Web Audio, sem assets)
 src/render/   pixel art (primitivas, paleta, ícones, sprites/)
@@ -87,7 +102,7 @@ TypeScript estrito + HTML + CSS + Vite + Vitest (zero framework, fácil de mante
 ```bash
 npm install
 npm run dev        # jogo com HMR
-npm test           # 53 testes (regras, prestígio, loja, inventário, elites, conquistas + paleta)
+npm test           # 59 testes (regras, prestígio, loja, inventário, elites, conquistas, missões + paleta)
 npm run typecheck  # tsc --noEmit
 npm run build      # typecheck + bundle p/ dist/
 ```

@@ -12,6 +12,7 @@ export type ModalKey =
   | 'renascer'
   | 'mochila'
   | 'conquistas'
+  | 'missoes'
   | 'cronicas'
   | 'ajuda'
   | null;

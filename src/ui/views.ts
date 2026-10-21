@@ -9,6 +9,8 @@ import {
   MAX_PECAS,
   MAX_SKILL,
   MAX_TIER,
+  MISSOES,
+  MISSOES_BONUS,
   ORDEM_SKILLS,
   ORDEM_SLOTS,
   PRESTIGIO,
@@ -24,6 +26,7 @@ import {
   listarConquistas,
   listarInventario,
   lugarDe,
+  missoesConcluidas,
   parametrosCombate,
   pityRestante,
   totalInimigos,
@@ -217,6 +220,45 @@ export function conquistasHtml(state: GameState): { titulo: string; html: string
   };
 }
 
+export function missoesHtml(state: GameState): { titulo: string; html: string } {
+  const m = state.missoes;
+  const feitas = missoesConcluidas(state);
+  const total = m.tipos.length;
+  const linhas = m.tipos
+    .map((tipo) => {
+      const def = MISSOES[tipo];
+      const progresso = Math.min(def.meta, m.progresso[tipo] ?? 0);
+      const concluida = m.concluidas.includes(tipo);
+      const pct = def.meta > 0 ? Math.min(100, (progresso / def.meta) * 100) : 100;
+      return `
+      <div class="conquista missao ${concluida ? 'feita' : ''}">
+        <div class="conquista-icone" aria-hidden="true">${concluida ? '✅' : '🎯'}</div>
+        <div class="conquista-info">
+          <div class="conquista-top">
+            <b>${def.nome}</b>
+            <span>${concluida ? 'Concluída' : `${fmt(progresso)}/${fmt(def.meta)}`}</span>
+          </div>
+          <div class="conquista-desc">${def.desc}</div>
+          <div class="conquista-track"><div class="conquista-fill" style="width:${pct.toFixed(1)}%"></div></div>
+          <div class="conquista-premio">Recompensa: ${ICONS.coin} ${fmt(def.ouro)} ouro</div>
+        </div>
+      </div>`;
+    })
+    .join('');
+  const bonus = m.bonusPago
+    ? `Bônus resgatado: +${ICONS.coin} ${fmt(MISSOES_BONUS.ouro)} e +${fmt(MISSOES_BONUS.brasoes)} brasão`
+    : `Complete as 3: +${ICONS.coin} ${fmt(MISSOES_BONUS.ouro)} e +${fmt(MISSOES_BONUS.brasoes)} brasão`;
+  return {
+    titulo: '🎯 Missões diárias',
+    html: `
+    <p class="hint">3 objetivos por dia, renovados à meia-noite (horário local). As recompensas são pagas automaticamente.</p>
+    ${stat('Concluídas', `${fmt(feitas)}/${fmt(total)}`)}
+    ${stat('Bônus diário', bonus)}
+    ${total > 0 ? `<div class="conquistas-lista">${linhas}</div>` : '<p class="hint">As missões do dia estão sendo preparadas...</p>'}
+  `,
+  };
+}
+
 export interface OpcoesMochila {
   filtro?: Raridade | null;
   ordem?: OrdemInventario;
@@ -366,6 +408,7 @@ export function ajudaHtml(): { titulo: string; html: string } {
     <div class="linha-stat"><span>Renascimento</span><b>troca progresso por brasões permanentes</b></div>
     <div class="linha-stat"><span>Mochila</span><b>itens caem dos monstros e viram ouro</b></div>
     <div class="linha-stat"><span>Conquistas</span><b>metas permanentes pagam ouro e brasões</b></div>
+    <div class="linha-stat"><span>Missões</span><b>3 objetivos por dia, renovados à meia-noite</b></div>
     <div class="linha-stat"><span>Drops</span><b>chance cresce com o nível; após 10 abates secos vem a garantia</b></div>
     <div class="linha-stat"><span>BOSS</span><b>sempre solta 3 itens, ao menos um raro</b></div>
     <div class="linha-stat"><span>Derrota</span><b>mantém o ouro e tenta de novo</b></div>

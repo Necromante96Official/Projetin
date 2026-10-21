@@ -9,6 +9,8 @@ import type {
   ItemTipo,
   ItemTipoDef,
   LugarDef,
+  MissaoDef,
+  MissaoTipo,
   Raridade,
   RegrasCombate,
   SkillDef,
@@ -410,6 +412,81 @@ export const CONQUISTAS: Readonly<Record<ConquistaId, ConquistaDef>> = {
     brasoes: 0,
   },
 };
+
+// --- Missões diárias: 3 metas sorteadas por dia, com bônus por completar todas. ---
+export const ORDEM_MISSOES: readonly MissaoTipo[] = [
+  'abates',
+  'vitorias',
+  'elites',
+  'bosses',
+  'drops',
+  'raros',
+  'compras',
+  'vendas',
+  'ouro',
+];
+
+export const MISSOES: Readonly<Record<MissaoTipo, MissaoDef>> = {
+  abates: {
+    nome: 'Caçada diária',
+    desc: 'Derrote 40 inimigos.',
+    meta: 40,
+    ouro: 120,
+  },
+  vitorias: {
+    nome: 'Limpeza de hordas',
+    desc: 'Vença 8 hordas.',
+    meta: 8,
+    ouro: 180,
+  },
+  elites: {
+    nome: 'Elites do dia',
+    desc: 'Derrote 4 inimigos elite.',
+    meta: 4,
+    ouro: 220,
+  },
+  bosses: {
+    nome: 'Chefe do dia',
+    desc: 'Derrote 1 BOSS.',
+    meta: 1,
+    ouro: 200,
+  },
+  drops: {
+    nome: 'Coleta',
+    desc: 'Encontre 6 itens.',
+    meta: 6,
+    ouro: 160,
+  },
+  raros: {
+    nome: 'Tesouro raro',
+    desc: 'Encontre 2 itens raros ou melhores.',
+    meta: 2,
+    ouro: 280,
+  },
+  compras: {
+    nome: 'Investimento',
+    desc: 'Compre 6 melhorias.',
+    meta: 6,
+    ouro: 150,
+  },
+  vendas: {
+    nome: 'Mercador',
+    desc: 'Venda 8 itens.',
+    meta: 8,
+    ouro: 140,
+  },
+  ouro: {
+    nome: 'Fluxo de caixa',
+    desc: 'Ganhe 2.500 de ouro.',
+    meta: 2500,
+    ouro: 240,
+  },
+};
+
+export const MISSOES_BONUS = {
+  ouro: 300,
+  brasoes: 1,
+} as const;
 
 // --- Inventário / drops: itens caem dos monstros e viram ouro ao reciclar. ---
 // Chances normais somam 100%; BOSS usa uma tabela melhor (mais raro no topo).

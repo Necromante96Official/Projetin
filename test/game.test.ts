@@ -6,6 +6,8 @@ import {
   MAX_LUGAR,
   MAX_SKILL,
   MAX_TIER,
+  MISSOES,
+  MISSOES_BONUS,
   ORDEM_CONQUISTAS,
   ORDEM_SKILLS,
   ORDEM_SLOTS,
@@ -30,19 +32,23 @@ import {
   custoUpgradeInventario,
   definirAutoReciclar,
   desbloquearConquistas,
+  garantirMissoes,
   gerarHorda,
   listarConquistas,
   listarInventario,
   lugarDe,
   melhorarInventario,
   migrarSave,
+  missoesConcluidas,
   ouroPorMinuto,
   parametrosCombate,
   pityRestante,
   podeRenascer,
   poderCavaleiro,
   processarDrops,
+  processarMissoes,
   progressoConquista,
+  registrarMissao,
   renascer,
   rolarDrops,
   sanitizarInventario,
@@ -720,5 +726,96 @@ describe('reino idle — conquistas', () => {
     expect(s.estatisticas.itensEncontrados).toBe(5);
     expect(s.estatisticas.itensLendarios).toBe(2);
     expect(desbloquearConquistas(s).map((c) => c.id)).toContain('explorador');
+  });
+});
+
+describe('reino idle — missões diárias', () => {
+  it('começa sem missões até a primeira data ser informada', () => {
+    const s = criarEstadoInicial();
+    expect(s.missoes.data).toBe('');
+    expect(s.missoes.tipos).toEqual([]);
+    expect(s.missoes.concluidas).toEqual([]);
+    expect(s.missoes.bonusPago).toBe(false);
+    expect(missoesConcluidas(s)).toBe(0);
+  });
+
+  it('sorteia 3 missões determinísticas e as mantém no mesmo dia', () => {
+    const a = criarEstadoInicial();
+    const b = criarEstadoInicial();
+    expect(garantirMissoes(a, '2026-10-21')).toBe(true);
+    expect(garantirMissoes(b, '2026-10-21')).toBe(true);
+    expect(a.missoes.data).toBe('2026-10-21');
+    expect(a.missoes.tipos).toHaveLength(3);
+    expect(new Set(a.missoes.tipos).size).toBe(3);
+    expect(a.missoes.tipos).toEqual(b.missoes.tipos);
+    expect(garantirMissoes(a, '2026-10-21')).toBe(false);
+  });
+
+  it('reinicia progresso e conclusões quando o dia muda', () => {
+    const s = criarEstadoInicial();
+    garantirMissoes(s, '2026-10-21');
+    const tipo = s.missoes.tipos[0]!;
+    expect(registrarMissao(s, tipo, 3)).toBe(true);
+    expect(s.missoes.progresso[tipo]).toBe(3);
+    s.missoes.concluidas = [tipo];
+    expect(garantirMissoes(s, '2026-10-22')).toBe(true);
+    expect(s.missoes.data).toBe('2026-10-22');
+    expect(s.missoes.tipos).toHaveLength(3);
+    expect(s.missoes.concluidas).toEqual([]);
+    expect(s.missoes.bonusPago).toBe(false);
+    for (const t of s.missoes.tipos) expect(s.missoes.progresso[t]).toBe(0);
+  });
+
+  it('ignora missão inativa e limita o progresso à meta', () => {
+    const s = criarEstadoInicial();
+    garantirMissoes(s, '2026-10-21');
+    const ativa = s.missoes.tipos[0]!;
+    const inativa = (Object.keys(MISSOES) as Array<keyof typeof MISSOES>).find(
+      (tipo) => !s.missoes.tipos.includes(tipo),
+    );
+    expect(inativa).toBeDefined();
+    expect(registrarMissao(s, inativa!, 1)).toBe(false);
+    expect(s.missoes.progresso[inativa!]).toBe(0);
+    expect(registrarMissao(s, ativa, 9999)).toBe(true);
+    expect(s.missoes.progresso[ativa]).toBe(MISSOES[ativa].meta);
+    expect(registrarMissao(s, ativa, 1)).toBe(false);
+  });
+
+  it('paga cada missão e o bônus das 3 apenas uma vez', () => {
+    const s = criarEstadoInicial();
+    garantirMissoes(s, '2026-10-21');
+    const ouroAntes = s.ouro;
+    const brasoesAntes = s.brasoes;
+    let premios = 0;
+    for (const tipo of s.missoes.tipos) {
+      premios += MISSOES[tipo].ouro;
+      registrarMissao(s, tipo, MISSOES[tipo].meta);
+    }
+    const resultado = processarMissoes(s);
+    expect(resultado.concluidas).toHaveLength(3);
+    expect(resultado.bonus).toBe(true);
+    expect(s.ouro).toBe(ouroAntes + premios + MISSOES_BONUS.ouro);
+    expect(s.brasoes).toBe(brasoesAntes + MISSOES_BONUS.brasoes);
+    expect(missoesConcluidas(s)).toBe(3);
+    expect(processarMissoes(s)).toEqual({ concluidas: [], bonus: false });
+    expect(s.ouro).toBe(ouroAntes + premios + MISSOES_BONUS.ouro);
+  });
+
+  it('sanitiza missões antigas/corrompidas no save', () => {
+    const s = migrarSave({
+      missoes: {
+        data: '2026-10-21',
+        tipos: ['abates', 'abates', 'bosses', 'inexistente'],
+        progresso: { abates: 99999, bosses: -3, ouro: 123.9 },
+        concluidas: ['abates', 'bosses', 'inexistente'],
+        bonusPago: true,
+      },
+    });
+    expect(s.missoes.tipos).toEqual(['abates', 'bosses']);
+    expect(s.missoes.progresso.abates).toBe(MISSOES.abates.meta);
+    expect(s.missoes.progresso.bosses).toBe(0);
+    expect(s.missoes.progresso.ouro).toBe(123);
+    expect(s.missoes.concluidas).toEqual(['abates', 'bosses']);
+    expect(s.missoes.bonusPago).toBe(true);
   });
 });

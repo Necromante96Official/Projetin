@@ -21,6 +21,7 @@ export type SomEvento =
   | 'lugar'
   | 'prestigio'
   | 'conquista'
+  | 'missao'
   | 'modalAbrir'
   | 'modalFechar';
 
@@ -246,6 +247,12 @@ export class Sfx {
           this.tom(f, 0.15, 'triangle', 0.09 * v, i * 0.075),
         );
         this.estalo(0.22, 0.04 * v, 3600, 0.16);
+        break;
+      case 'missao':
+        [523, 698, 880, 1047].forEach((f, i) =>
+          this.tom(f, 0.13, 'sine', 0.08 * v, i * 0.07),
+        );
+        this.estalo(0.16, 0.035 * v, 3000, 0.12);
         break;
       case 'modalAbrir':
         this.tom(440, 0.06, 'triangle', 0.08 * v, 0, 560);

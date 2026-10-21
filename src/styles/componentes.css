@@ -555,6 +555,21 @@
   font-variant-numeric: tabular-nums;
 }
 
+.conquista.missao .conquista-fill {
+  background: linear-gradient(90deg, #2f7a5b, #7fd6a4);
+}
+.conquista.missao.feita {
+  border-color: rgba(127, 214, 164, 0.4);
+  background:
+    linear-gradient(180deg, rgba(127, 214, 164, 0.08), rgba(0, 0, 0, 0.16)),
+    rgba(0, 0, 0, 0.14);
+}
+.conquista.missao.feita .conquista-icone {
+  background: rgba(127, 214, 164, 0.13);
+  border-color: rgba(127, 214, 164, 0.4);
+  box-shadow: 0 0 16px -6px rgba(127, 214, 164, 0.7);
+}
+
 /* ---------- Mochila ---------- */
 .mochila-track {
   height: 10px;

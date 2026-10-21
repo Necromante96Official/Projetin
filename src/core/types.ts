@@ -103,6 +103,33 @@ export interface ConquistaDef {
   brasoes: number;
 }
 
+export type MissaoTipo =
+  | 'abates'
+  | 'vitorias'
+  | 'elites'
+  | 'bosses'
+  | 'drops'
+  | 'raros'
+  | 'compras'
+  | 'vendas'
+  | 'ouro';
+
+export interface MissaoDef {
+  nome: string;
+  desc: string;
+  meta: number;
+  ouro: number;
+}
+
+export interface MissoesDiarias {
+  /** data local YYYY-MM-DD */
+  data: string;
+  tipos: MissaoTipo[];
+  progresso: Record<MissaoTipo, number>;
+  concluidas: MissaoTipo[];
+  bonusPago: boolean;
+}
+
 export interface Estatisticas {
   /** ouro ganho na vida, sem descontar gastos */
   ouroTotal: number;
@@ -172,13 +199,20 @@ export interface GameState {
   inventario: Inventario;
   estatisticas: Estatisticas;
   conquistas: ConquistaId[];
+  missoes: MissoesDiarias;
   updatedAt: number;
 }
 
 /** Save cru vindo do localStorage: pode conter modelo antigo ou corrompido. */
 export type SaveCru = Omit<
   Partial<GameState>,
-  'cavaleiro' | 'equip' | 'skills' | 'inventario' | 'estatisticas' | 'conquistas'
+  | 'cavaleiro'
+  | 'equip'
+  | 'skills'
+  | 'inventario'
+  | 'estatisticas'
+  | 'conquistas'
+  | 'missoes'
 > & {
   nivelInimigo?: unknown;
   herois?: Array<{ nome?: unknown; atk?: unknown; hp?: unknown }>;
@@ -192,6 +226,7 @@ export type SaveCru = Omit<
   inventario?: unknown;
   estatisticas?: unknown;
   conquistas?: unknown;
+  missoes?: unknown;
   [extra: string]: unknown;
 };
 

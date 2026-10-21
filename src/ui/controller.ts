@@ -11,6 +11,7 @@ import {
   criarEstadoInicial,
   definirAutoReciclar,
   desbloquearConquistas,
+  garantirMissoes,
   indiceRaridade,
   limiteSimultaneos,
   lugarDe,
@@ -18,6 +19,8 @@ import {
   ouroPorMinuto,
   parametrosCombate,
   processarDrops,
+  processarMissoes,
+  registrarMissao,
   renascer,
   rolarDrops,
   simularHorda,
@@ -26,6 +29,7 @@ import {
   venderTodosItens,
   EQUIPS,
   MAX_PECAS,
+  MISSOES_BONUS,
   RARIDADE_INFO,
   SKILLS,
   totalTiersEquip,
@@ -57,6 +61,7 @@ import {
   cronicasHtml,
   equipamentosHtml,
   lugarHtml,
+  missoesHtml,
   mochilaHtml,
   renascerHtml,
   skillsHtml,
@@ -126,6 +131,7 @@ export class GameController {
         const slot = (btn as HTMLElement).dataset.eq as EquipSlot;
         if (comprarEquip(this.state, slot)) {
           this.sfx.tocar('compra');
+          registrarMissao(this.state, 'compras');
           this.logs.log(`🛒 Comprou: ${EQUIPS[slot].nome}.`, 'buy');
           this.persistirERender();
         } else {
@@ -144,6 +150,7 @@ export class GameController {
         const id = (btn as HTMLElement).dataset.sk as SkillId;
         if (comprarSkill(this.state, id)) {
           this.sfx.tocar('skill');
+          registrarMissao(this.state, 'compras');
           this.logs.log(`🛒 Skill: ${SKILLS[id].nome} Nv.${this.state.skills[id]}.`, 'buy');
           this.persistirERender();
         } else {
@@ -168,6 +175,12 @@ export class GameController {
     else this.modal.atualizar(titulo, html, 'conquistas');
   }
 
+  private renderMissoes(abrir: boolean): void {
+    const { titulo, html } = missoesHtml(this.state);
+    if (abrir) this.modal.abrir(titulo, html, 'missoes');
+    else this.modal.atualizar(titulo, html, 'missoes');
+  }
+
   private renderMochila(abrir: boolean): void {
     const { titulo, html } = mochilaHtml(this.state, {
       filtro: this.filtroMochila,
@@ -182,6 +195,7 @@ export class GameController {
       upgrade.onclick = () => {
         if (melhorarInventario(this.state)) {
           this.sfx.tocar('compra');
+          registrarMissao(this.state, 'compras');
           this.logs.log(
             `🎒 Mochila ampliada para ${this.state.inventario.capacidade} espaços.`,
             'buy',
@@ -232,7 +246,8 @@ export class GameController {
         if (!item) return;
         const valor = venderItem(this.state, i);
         if (valor != null) {
-          this.registrarOuroTotal(valor);
+          this.registrarOuroGanho(valor);
+          registrarMissao(this.state, 'vendas');
           this.sfx.tocar('vender');
           this.logs.log(
             `💰 Vendeu ${item.nome} (${RARIDADE_INFO[item.raridade].nome}) por ${fmt(valor)} ouro.`,
@@ -250,7 +265,8 @@ export class GameController {
       todos.onclick = () => {
         const vendidos = venderTodosItens(this.state);
         if (vendidos.itens > 0) {
-          this.registrarOuroTotal(vendidos.ouro);
+          this.registrarOuroGanho(vendidos.ouro);
+          registrarMissao(this.state, 'vendas', vendidos.itens);
           this.sfx.tocar('vender');
           this.logs.log(
             `💰 Vendeu ${vendidos.itens} ${vendidos.itens > 1 ? 'itens' : 'item'} por ${fmt(vendidos.ouro)} ouro.`,
@@ -269,7 +285,8 @@ export class GameController {
       porFiltro.onclick = () => {
         const vendidos = venderItensPorRaridade(this.state, raridade);
         if (vendidos.itens > 0) {
-          this.registrarOuroTotal(vendidos.ouro);
+          this.registrarOuroGanho(vendidos.ouro);
+          registrarMissao(this.state, 'vendas', vendidos.itens);
           this.sfx.tocar('vender');
           const quantidade = `${vendidos.itens} ${vendidos.itens > 1 ? 'itens' : 'item'}`;
           this.logs.log(
@@ -311,6 +328,11 @@ export class GameController {
   abrirConquistas(): void {
     this.checarConquistas();
     this.renderConquistas(true);
+  }
+
+  abrirMissoes(): void {
+    this.checarConquistas();
+    this.renderMissoes(true);
   }
 
   abrirCronicas(): void {
@@ -364,6 +386,7 @@ export class GameController {
       return;
     }
     this.sfx.tocar('compra');
+    registrarMissao(this.state, 'compras', resultado.compras);
     this.logs.log(
       `⚡ Comprou ${resultado.compras} melhoria${resultado.compras > 1 ? 's' : ''} por ${fmt(resultado.gasto)} ouro.`,
       'buy',
@@ -389,6 +412,7 @@ export class GameController {
     else if (chave === 'renascer') this.renderRenascer(false);
     else if (chave === 'mochila') this.renderMochila(false);
     else if (chave === 'conquistas') this.renderConquistas(false);
+    else if (chave === 'missoes') this.renderMissoes(false);
   }
 
   /** Mantém barra e número de HP coerentes durante a luta (dano + regeneração). */
@@ -407,6 +431,21 @@ export class GameController {
     this.sfx.ambiente(l.bioma);
   }
 
+  private dataLocalHoje(): string {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+      d.getDate(),
+    ).padStart(2, '0')}`;
+  }
+
+  private garantirMissoesDoDia(): void {
+    const tinha = this.state.missoes.data !== '';
+    if (!garantirMissoes(this.state, this.dataLocalHoje()) || !tinha) return;
+    this.sfx.tocar('missao');
+    this.logs.log('🎯 Novas missões diárias disponíveis. Complete as 3 para o bônus!', 'info');
+    this.logs.flash('🎯 Missões diárias renovadas!', true);
+  }
+
   private registrarOuroTotal(valor: number): void {
     if (!Number.isFinite(valor) || valor <= 0) return;
     const est = this.state.estatisticas;
@@ -416,10 +455,15 @@ export class GameController {
     );
   }
 
+  private registrarOuroGanho(valor: number): void {
+    this.registrarOuroTotal(valor);
+    registrarMissao(this.state, 'ouro', valor);
+  }
+
   private ganharOuro(valor: number): void {
     if (!Number.isFinite(valor) || valor <= 0) return;
     this.state.ouro = Math.min(Number.MAX_SAFE_INTEGER, this.state.ouro + valor);
-    this.registrarOuroTotal(valor);
+    this.registrarOuroGanho(valor);
   }
 
   private registrarProgresso(): void {
@@ -428,8 +472,32 @@ export class GameController {
     est.maiorNivel = Math.max(est.maiorNivel, this.state.nivel);
   }
 
+  private relatarMissoes(resultado: ReturnType<typeof processarMissoes>): void {
+    if (resultado.concluidas.length === 0 && !resultado.bonus) return;
+    this.sfx.tocar('missao');
+    for (const { def } of resultado.concluidas) {
+      this.registrarOuroTotal(def.ouro);
+      this.logs.log(`🎯 Missão concluída: ${def.nome} — +${fmt(def.ouro)} ouro.`, 'buy');
+    }
+    if (resultado.bonus) {
+      this.registrarOuroTotal(MISSOES_BONUS.ouro);
+      this.logs.log(
+        `🎯 Bônus diário completo: +${fmt(MISSOES_BONUS.ouro)} ouro e +${fmt(MISSOES_BONUS.brasoes)} brasão.`,
+        'buy',
+      );
+    }
+    this.logs.flash(
+      resultado.bonus
+        ? '🎯 Bônus diário completo!'
+        : `🎯 ${resultado.concluidas.length} missão${resultado.concluidas.length > 1 ? 'ões' : ''} concluída${resultado.concluidas.length > 1 ? 's' : ''}!`,
+      true,
+    );
+  }
+
   private checarConquistas(): void {
+    this.garantirMissoesDoDia();
     this.registrarProgresso();
+    this.relatarMissoes(processarMissoes(this.state));
     const novas = desbloquearConquistas(this.state);
     if (novas.length === 0) return;
     this.sfx.tocar('conquista');
@@ -510,16 +578,31 @@ export class GameController {
             if (!ativo()) return;
             this.ganharOuro(def.gold);
             this.state.abates += 1;
+            registrarMissao(this.state, 'abates');
             const est = this.state.estatisticas;
-            if (def.elite) est.elitesDerrotados += 1;
-            if (def.boss) est.bossesDerrotados += 1;
+            if (def.elite) {
+              est.elitesDerrotados += 1;
+              registrarMissao(this.state, 'elites');
+            }
+            if (def.boss) {
+              est.bossesDerrotados += 1;
+              registrarMissao(this.state, 'bosses');
+            }
             const itens = rolarDrops(this.state, { boss: def.boss });
             if (itens.length > 0) {
               est.itensEncontrados += itens.length;
               est.itensLendarios += itens.filter((item) => item.raridade === 'lendario').length;
+              registrarMissao(this.state, 'drops', itens.length);
+              registrarMissao(
+                this.state,
+                'raros',
+                itens.filter(
+                  (item) => indiceRaridade(item.raridade) >= indiceRaridade('raro'),
+                ).length,
+              );
               this.sfx.tocar('drop');
               const resumo = processarDrops(this.state, itens);
-              this.registrarOuroTotal(resumo.ouro);
+              this.registrarOuroGanho(resumo.ouro);
               lootItens += resumo.obtidos.length;
               lootReciclados += resumo.reciclados;
               lootOuro += resumo.ouro;
@@ -590,6 +673,7 @@ export class GameController {
         this.sfx.tocar('vitoria');
         this.ganharOuro(horda.bonus);
         this.state.vitorias += 1;
+        registrarMissao(this.state, 'vitorias');
         this.logs.flash(`✅ Nível limpo! +${fmt(res.ouro + horda.bonus)} ouro`, true);
         if (horda.boss) {
           this.logs.log(
@@ -706,6 +790,7 @@ export class GameController {
         this.resetarBatalhaVisual();
         this.logs.limpar();
         this.logs.log('👑 Novo reino fundado! Boa sorte, regente.', 'info');
+        this.garantirMissoesDoDia();
         salvar(this.state);
         this.descansoAtual();
         this.render();
@@ -728,6 +813,7 @@ export class GameController {
     el('btn-skills').onclick = () => this.abrirSkills();
     el('btn-mochila').onclick = () => this.abrirMochila();
     el('btn-conquistas').onclick = () => this.abrirConquistas();
+    el('btn-missoes').onclick = () => this.abrirMissoes();
     el('btn-renascer').onclick = () => this.abrirRenascer();
     el('btn-auto-comprar').onclick = () => this.comprarAcessivel();
     el('btn-cronicas').onclick = () => this.abrirCronicas();
@@ -767,6 +853,7 @@ export class GameController {
     }, 5000);
 
     // ganho offline
+    this.garantirMissoesDoDia();
     const ganho = calcularGanhoOffline(this.state);
     if (ganho.ouro > 0) {
       this.ganharOuro(ganho.ouro);

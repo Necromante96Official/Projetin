@@ -20,6 +20,7 @@ src/
     inventory.ts           drops por tipo/raridade, pity, mochila, auto-reciclagem, upgrade
     offline.ts             ouroPorMinuto, calcularGanhoOffline
     achievements.ts        metas, progresso permanente e recompensas únicas
+    missions.ts            3 missões diárias determinísticas, progresso e bônus
     index.ts               barrel (import único do núcleo)
   engine/                  TEMPO REAL — canvas + relógio
     arena.ts               class Arena (spawn, combate, desenho, watchdog, onSfx)
@@ -45,7 +46,7 @@ src/
     controller.ts          GameController — estado + timers + batalha + boot
   styles/                  CSS (base, layout, componentes)
 test/
-  game.test.ts             regras/loja/horda/save/offline/prestígio/inventário/itens/conquistas
+  game.test.ts             regras/loja/horda/save/offline/prestígio/inventário/itens/conquistas/missões
   palette.test.ts          paleta/spec/matriz/biomas
 ```
 
@@ -80,6 +81,7 @@ core  →  nada (puro)
 | Balancear drops/mochila | `core/data.ts` (`RARIDADE_INFO`, `TIPOS_ITEM`, `INVENTARIO`) + `core/inventory.ts` | `npm test` inventário |
 | Adicionar visual de item | `core/types.ts` (`ItemTipo`) + `core/data.ts` (`TIPOS_ITEM`) + `render/icons.ts` | `npm test` catálogo + modal |
 | Nova conquista | `core/types.ts` (`ConquistaId`) + `core/data.ts` (`CONQUISTAS`) + `core/achievements.ts` (progresso) | `npm test` conquistas |
+| Nova missão diária | `core/types.ts` (`MissaoTipo`) + `core/data.ts` (`MISSOES`) + `core/missions.ts` + contador no `ui/controller.ts` | `npm test` missões |
 | Novo modal/loja | `ui/views.ts` (HTML) + `ui/controller.ts` (wiring) | manual |
 | Novo campo no save | `core/types.ts` + `core/state.ts` (default + migração) | `npm test` migração |
 
@@ -114,13 +116,19 @@ core  →  nada (puro)
   chama `desbloquearConquistas` após batalhas, compras, vendas, renascimento e
   boot, paga ouro/brasões uma única vez e registra nas Crônicas. Renascer preserva
   conquistas, recordes e contadores permanentes.
+- Missões diárias: `core/missions.ts` é a única regra de sorteio/progresso/bônus.
+  `MISSOES`, `ORDEM_MISSOES` e `MISSOES_BONUS` ficam em `data.ts`; a data local
+  (`YYYY-MM-DD`) é calculada no controller e passada para `garantirMissoes`, mantendo
+  o core puro. O progresso zera na troca de dia; `state.ts` sanitiza o bloco e
+  `processarMissoes` paga cada meta e o bônus uma única vez. Renascer preserva o
+  progresso do dia.
 
 ## Comandos
 
 ```bash
 npm install
 npm run dev        # jogo com HMR
-npm test           # vitest (53 testes)
+npm test           # vitest (59 testes)
 npm run typecheck  # tsc --noEmit
 npm run build      # typecheck + bundle p/ dist/ (GitHub Pages)
 ```

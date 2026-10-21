@@ -5,6 +5,7 @@ import {
   EQUIPS,
   MAX_PECAS,
   MAX_TIER,
+  MISSOES,
   ORDEM_CONQUISTAS,
   ORDEM_SKILLS,
   ORDEM_SLOTS,
@@ -16,6 +17,7 @@ import {
   ehBoss,
   indiceRaridade,
   lugarDe,
+  missoesConcluidas,
   parametrosCombate,
   simularHorda,
   totalTiersEquip,
@@ -77,6 +79,17 @@ export class Hud {
     el('derrotas').textContent = fmt(state.derrotas || 0);
     el('conquistas-label').textContent =
       `${fmt(state.conquistas.length)}/${fmt(ORDEM_CONQUISTAS.length)}`;
+
+    const missoes = state.missoes;
+    const feitasMissoes = missoesConcluidas(state);
+    el('missoes-contador').textContent = `${fmt(feitasMissoes)}/${fmt(missoes.tipos.length)}`;
+    const pendente = missoes.tipos.find((tipo) => !missoes.concluidas.includes(tipo));
+    el('missoes-resumo').textContent =
+      missoes.tipos.length === 0
+        ? 'Preparando os objetivos do dia...'
+        : pendente
+          ? `Próxima: ${MISSOES[pendente].nome} (${fmt(missoes.progresso[pendente] ?? 0)}/${fmt(MISSOES[pendente].meta)})`
+          : 'Bônus do dia resgatado. Novos objetivos à meia-noite.';
 
     const renascerLabel = el('renascer-label');
     renascerLabel.textContent =
