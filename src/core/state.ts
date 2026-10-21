@@ -1,9 +1,24 @@
 // core/state.ts — criação e migração de save. Único lugar que conhece
 // os formatos antigos (fase única, esquadrão, prédios) e o saneamento anti-NaN.
 
-import { MAX_LUGAR, MAX_SKILL, MAX_TIER, ORDEM_SKILLS, ORDEM_SLOTS, PRESTIGIO } from './data.js';
+import {
+  MAX_LUGAR,
+  MAX_SKILL,
+  MAX_TIER,
+  ORDEM_CONQUISTAS,
+  ORDEM_SKILLS,
+  ORDEM_SLOTS,
+  PRESTIGIO,
+} from './data.js';
 import { criarInventarioInicial, sanitizarInventario } from './inventory.js';
-import type { EquipSlot, GameState, SaveCru, SkillId } from './types.js';
+import type {
+  ConquistaId,
+  EquipSlot,
+  Estatisticas,
+  GameState,
+  SaveCru,
+  SkillId,
+} from './types.js';
 
 const num = (v: unknown, d: number): number => {
   if (typeof v === 'number') return Number.isFinite(v) ? v : d;
@@ -22,6 +37,35 @@ const inteiroSeguro = (v: unknown, d: number): number =>
 
 const statSegura = (v: unknown, d: number): number =>
   Math.min(Number.MAX_SAFE_INTEGER, Math.max(1, num(v, d)));
+
+const estatisticasSeguras = (v: unknown): Estatisticas => {
+  const e =
+    v && typeof v === 'object'
+      ? (v as Partial<Record<keyof Estatisticas, unknown>>)
+      : {};
+  return {
+    ouroTotal: inteiroSeguro(e.ouroTotal, 0),
+    bossesDerrotados: inteiroSeguro(e.bossesDerrotados, 0),
+    elitesDerrotados: inteiroSeguro(e.elitesDerrotados, 0),
+    itensEncontrados: inteiroSeguro(e.itensEncontrados, 0),
+    itensLendarios: inteiroSeguro(e.itensLendarios, 0),
+    maiorLugar: Math.min(MAX_LUGAR, inteiroSeguro(e.maiorLugar, 0)),
+    maiorNivel: Math.min(10, Math.max(1, inteiroSeguro(e.maiorNivel, 1))),
+  };
+};
+
+const conquistasSeguras = (v: unknown): ConquistaId[] => {
+  if (!Array.isArray(v)) return [];
+  const validas = new Set<string>(ORDEM_CONQUISTAS);
+  return [
+    ...new Set(
+      v.filter(
+        (id): id is ConquistaId =>
+          typeof id === 'string' && validas.has(id),
+      ),
+    ),
+  ];
+};
 
 const nomeSeguro = (v: unknown): string => {
   if (typeof v !== 'string') return 'Sor Aria';
@@ -42,11 +86,29 @@ export function criarEstadoInicial(): GameState {
     derrotas: 0,
     abates: 0,
     equip: { elmo: 0, camisa: 0, calcas: 0, botas: 0, arma: 0, escudo: 0 },
-    skills: { afiado: 0, vigor: 0, regen: 0, rapidez: 0, saque: 0 },
+    skills: {
+      afiado: 0,
+      vigor: 0,
+      regen: 0,
+      rapidez: 0,
+      saque: 0,
+      fortuna: 0,
+      tenacidade: 0,
+    },
     cavaleiro: { nome: 'Sor Aria', atk: 10, hp: 100 },
     brasoes: 0,
     renascimentos: 0,
     inventario: criarInventarioInicial(),
+    estatisticas: {
+      ouroTotal: 0,
+      bossesDerrotados: 0,
+      elitesDerrotados: 0,
+      itensEncontrados: 0,
+      itensLendarios: 0,
+      maiorLugar: 0,
+      maiorNivel: 1,
+    },
+    conquistas: [],
     updatedAt: Date.now(),
   };
 }
@@ -101,6 +163,23 @@ export function migrarSave(state: SaveCru | null | undefined): GameState {
 
   // mochila: capacidade em passos de 50, itens/auto-reciclagem válidos
   s.inventario = sanitizarInventario((state as SaveCru).inventario);
+
+  // conquistas: estatísticas permanentes e saves antigos ganham crédito retroativo
+  const est = estatisticasSeguras((state as SaveCru).estatisticas);
+  est.maiorLugar = Math.max(est.maiorLugar, s.lugar);
+  est.maiorNivel = Math.max(est.maiorNivel, s.nivel);
+  est.bossesDerrotados = Math.max(est.bossesDerrotados, s.lugar);
+  est.ouroTotal = Math.max(est.ouroTotal, s.ouro);
+  est.itensEncontrados = Math.max(
+    est.itensEncontrados,
+    s.inventario.itens.length + s.inventario.reciclados,
+  );
+  est.itensLendarios = Math.max(
+    est.itensLendarios,
+    s.inventario.itens.filter((item) => item.raridade === 'lendario').length,
+  );
+  s.estatisticas = est;
+  s.conquistas = conquistasSeguras((state as SaveCru).conquistas);
 
   // prédios antigos viram reembolso em ouro (sistema removido)
   let refund = 0;

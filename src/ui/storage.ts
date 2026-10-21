@@ -4,6 +4,7 @@
 import { criarEstadoInicial, migrarSave, type GameState, type SaveCru } from '../core/index.js';
 
 export const SAVE_KEY = 'reino-idle-save-v1';
+export const SOM_KEY = 'reino-idle-som';
 
 export function carregar(): GameState {
   try {
@@ -32,6 +33,22 @@ export function salvar(state: GameState): void {
 export function apagarSave(): void {
   try {
     localStorage.removeItem(SAVE_KEY);
+  } catch {
+    /* sem storage */
+  }
+}
+
+export function carregarMudo(): boolean {
+  try {
+    return localStorage.getItem(SOM_KEY) === 'off';
+  } catch {
+    return false;
+  }
+}
+
+export function salvarMudo(mudo: boolean): void {
+  try {
+    localStorage.setItem(SOM_KEY, mudo ? 'off' : 'on');
   } catch {
     /* sem storage */
   }

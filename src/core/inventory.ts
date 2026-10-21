@@ -7,6 +7,7 @@ import {
   ORDEM_TIPOS_ITEM,
   RARIDADES,
   RARIDADE_INFO,
+  SKILL_MULT,
   TIPOS_ITEM,
 } from './data.js';
 import type {
@@ -37,6 +38,10 @@ const TIPO_POR_NOME_LEGADO: Readonly<Record<string, ItemTipo>> = {
   'Amuleto do viajante': 'colar',
   'Gema bruta': 'gema',
   'Relíquia esquecida': 'reliquia',
+  'Escama rachada': 'escama',
+  'Mapa rasgado': 'mapa',
+  'Grimório mofado': 'grimorio',
+  'Troféu de madeira': 'trofeu',
 };
 
 const PISTAS_TIPO: readonly (readonly [RegExp, ItemTipo])[] = [
@@ -52,6 +57,10 @@ const PISTAS_TIPO: readonly (readonly [RegExp, ItemTipo])[] = [
   [/cristal/i, 'cristal'],
   [/rel[íi]quia|selo/i, 'reliquia'],
   [/gema/i, 'gema'],
+  [/escama/i, 'escama'],
+  [/mapa/i, 'mapa'],
+  [/grim[oó]rio|livro/i, 'grimorio'],
+  [/tro[fé]u/i, 'trofeu'],
 ];
 
 function inteiroSeguro(v: unknown, d: number): number {
@@ -218,9 +227,14 @@ export function chanceDropNormal(state: GameState): number {
     1,
     Math.floor(Number.isFinite(state.nivel) ? state.nivel : 1),
   );
+  const fortuna = Math.max(
+    0,
+    Math.floor(Number.isFinite(state.skills?.fortuna) ? state.skills.fortuna : 0),
+  );
+  const base = INVENTARIO.chanceDropBase + nivel * INVENTARIO.chanceDropPorNivel;
   return Math.min(
     INVENTARIO.chanceDropMax,
-    INVENTARIO.chanceDropBase + nivel * INVENTARIO.chanceDropPorNivel,
+    base * (1 + SKILL_MULT.fortunaPorNv * fortuna),
   );
 }
 

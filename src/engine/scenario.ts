@@ -93,6 +93,42 @@ const BIOMAS: Record<BiomaId, BiomaBase> = {
     chaoB: '#2a2637',
     part: 'cinzas',
   },
+  ruinas: {
+    nome: 'Ruínas Douradas',
+    ceu: ['#d8a85a', '#5a3a28'],
+    astro: 'sol',
+    longe: '#8a6a3a',
+    chaoA: '#a88c5a',
+    chaoB: '#6e5a3a',
+    part: 'folhas',
+  },
+  pantano: {
+    nome: 'Pântano das Almas',
+    ceu: ['#3f5d52', '#162a24'],
+    astro: 'lua',
+    longe: '#25463d',
+    chaoA: '#3a5548',
+    chaoB: '#22382e',
+    part: 'vagalumes',
+  },
+  abismo: {
+    nome: 'Abismo de Obsidiana',
+    ceu: ['#2a1430', '#0c0712'],
+    astro: 'nenhum',
+    longe: '#3b1d40',
+    chaoA: '#2d1d32',
+    chaoB: '#170f1b',
+    part: 'brasas',
+  },
+  cidadela: {
+    nome: 'Cidadela Celeste',
+    ceu: ['#b7c9e8', '#f1e6c8'],
+    astro: 'sol',
+    longe: '#9aa8c8',
+    chaoA: '#d5d9e8',
+    chaoB: '#9aa3bc',
+    part: 'cinzas',
+  },
 };
 
 export function biomaPorLugar(lugarAbs: number, biomaId: BiomaId): Bioma {

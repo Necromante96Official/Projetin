@@ -103,7 +103,7 @@
 }
 .recurso.ouro strong { color: var(--gold-2); }
 
-.top-actions { display: flex; gap: 8px; }
+.top-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .dot {
   display: inline-block;
   width: 7px;

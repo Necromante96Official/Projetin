@@ -44,7 +44,7 @@ Cada tier muda o visual (ver §4). `flash>0` = overlay branco; `caido` = alpha 0
 Ordem de desenho (pincel do programador): sombra → pernas → botas → torso
 (+ombreiras T≥2) → escudo → cabeça → braço+arma (com `rotate`) → flash.
 
-## 4. Monstros (`TIPOS`, 6 kinds)
+## 4. Monstros (`TIPOS`, 12 kinds)
 
 | # | Nome | h | Pele | Roupa | Extra | Arma |
 |---|---|---|---|---|---|---|
@@ -54,9 +54,17 @@ Ordem de desenho (pincel do programador): sombra → pernas → botas → torso
 | 3 | Esqueleto | 14 | `#e9e4da` | `#8a8578` | crânio, costelas | espada |
 | 4 | Bandido | 13 | `#b197fc` | `#5f3dc4` | capuz + faixa vermelha | adaga |
 | 5 | Troll | 19 | `#63a375` | `#3d6b4f` | barriga + bochechas | clavão |
+| 6 | Morcego Sombrio | 8 | `#a78bfa` | `#5b3fa8` | asas animadas, voo | — |
+| 7 | Aranha Gigante | 9 | `#6d4c9f` | `#3b2a5a` | 8 pernas, abdômen, teia | — |
+| 8 | Golem de Gelo | 30 | `#a5d8ff` | `#4d7fa8` | corpo de pedra, núcleo e rachaduras | — |
+| 9 | Espectro | 26 | `#9ae6c8` | `#2f6b57` | flutua, cauda esvoaçante, capuz | adaga |
+| 10 | Cavaleiro Caído | 16 | `#5d6f88` | `#1c2333` | elmo fechado, ombreiras, runa | espada |
+| 11 | Dragão Jovem | 34 | `#ff922b` | `#a63a0a` | asas, cauda, chifres, brasa | — |
 
-Lugares: Campo Verde `[0,1,2]` boss Orc; Floresta Sombria `[3,4,5]` boss Troll.
-Biomas extras prontos em `engine/scenario.ts` (caverna/neve/castelo) para lugares futuros.
+Lugares: Campo Verde `[0,1,2]`, Floresta Sombria `[2,3,5]`, Caverna de Brasas
+`[6,7,3]`, Pico Nevado `[8,2,3]`, Castelo Sombrio `[9,10,4]`, Ruínas Douradas
+`[4,10,0]`, Pântano das Almas `[7,9,3]`, Abismo de Obsidiana `[11,6,7]` e
+Cidadela Celeste `[8,9,10]`. Elites usam os mesmos kinds com escala 1.3 e coroa.
 
 ## 5. Cenário
 

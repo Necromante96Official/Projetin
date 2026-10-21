@@ -51,7 +51,10 @@ describe('reformulação sprites — paleta e matriz', () => {
 
   it('biomas resolvem volta corretamente', () => {
     expect(biomaPorLugar(0, 'campo').volta).toBe(1);
-    expect(biomaPorLugar(2, 'campo').volta).toBe(2);
+    expect(biomaPorLugar(8, 'cidadela').volta).toBe(1);
+    expect(biomaPorLugar(9, 'campo').volta).toBe(2);
+    expect(biomaPorLugar(18, 'campo').volta).toBe(3);
     expect(biomaPorLugar(1, 'floresta').nome).toBe('Floresta Sombria');
+    expect(biomaPorLugar(8, 'cidadela').nome).toBe('Cidadela Celeste');
   });
 });

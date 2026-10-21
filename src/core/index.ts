@@ -11,3 +11,4 @@ export * from './shop.js';
 export * from './prestige.js';
 export * from './inventory.js';
 export * from './offline.js';
+export * from './achievements.js';

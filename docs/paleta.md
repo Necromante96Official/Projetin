@@ -55,6 +55,12 @@
 | Esqueleto | `#e9e4da` | `#8a8578` |
 | Bandido/capuz | `#b197fc` | `#5f3dc4` |
 | Troll | `#63a375` | `#3d6b4f` |
+| Morcego | `#a78bfa` | `#5b3fa8` |
+| Aranha | `#6d4c9f` | `#3b2a5a` |
+| Golem de gelo | `#a5d8ff` | `#4d7fa8` |
+| Espectro | `#9ae6c8` | `#2f6b57` |
+| Cavaleiro caído | `#5d6f88` | `#1c2333` |
+| Dragão | `#ff922b` | `#a63a0a` |
 
 ### FX/UI
 | Uso | Hex |

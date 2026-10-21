@@ -155,6 +155,7 @@
   transform: translateY(-1px);
 }
 .btn-ghost:active { transform: translateY(0); }
+.btn-ghost.mudo { color: #8d819f; border-color: rgba(255, 255, 255, 0.08); }
 .btn-ghost:disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -471,6 +472,88 @@
 .modal-log li.info { color: var(--blue); }
 
 .modal-actions { display: flex; gap: 10px; margin-top: 16px; }
+
+/* ---------- Conquistas ---------- */
+.conquistas-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-top: 14px;
+}
+
+.conquista {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 11px;
+  align-items: start;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  padding: 11px 12px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(0, 0, 0, 0.16)),
+    rgba(0, 0, 0, 0.14);
+}
+
+.conquista.feita {
+  border-color: rgba(232, 179, 74, 0.45);
+  background:
+    linear-gradient(180deg, rgba(232, 179, 74, 0.08), rgba(0, 0, 0, 0.16)),
+    rgba(0, 0, 0, 0.14);
+}
+
+.conquista-icone {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  font-size: 1rem;
+}
+
+.conquista.feita .conquista-icone {
+  background: rgba(232, 179, 74, 0.14);
+  border-color: rgba(232, 179, 74, 0.4);
+  box-shadow: 0 0 16px -6px rgba(232, 179, 74, 0.7);
+}
+
+.conquista-info { min-width: 0; }
+.conquista-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+.conquista-top b { color: #e7ddf5; font-size: 0.86rem; }
+.conquista-top span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.conquista.feita .conquista-top span { color: var(--gold-2); font-weight: 700; }
+.conquista-desc { color: var(--muted); font-size: 0.76rem; margin-top: 3px; line-height: 1.4; }
+.conquista-track {
+  height: 6px;
+  margin-top: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #0d0a17;
+  border: 1px solid rgba(151, 127, 208, 0.18);
+}
+.conquista-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #a77a20, var(--gold));
+  transition: width 0.35s ease;
+}
+.conquista-premio {
+  color: #b9aed0;
+  font-size: 0.68rem;
+  margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+}
 
 /* ---------- Mochila ---------- */
 .mochila-track {

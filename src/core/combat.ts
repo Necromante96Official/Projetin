@@ -42,6 +42,10 @@ export function parametrosCombate(state: GameState): CombatParams {
     ),
     regen: SKILL_MULT.regenPorNv * nv('regen') * prestigio.stats,
     ouroMult: (1 + SKILL_MULT.saquePorNv * nv('saque')) * prestigio.ouro,
+    reducaoDano: Math.min(
+      SKILL_MULT.reducaoDanoMax,
+      SKILL_MULT.tenacidadePorNv * nv('tenacidade'),
+    ),
   };
 }
 

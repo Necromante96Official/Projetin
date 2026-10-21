@@ -5,6 +5,7 @@ import {
   EQUIPS,
   MAX_PECAS,
   MAX_TIER,
+  ORDEM_CONQUISTAS,
   ORDEM_SKILLS,
   ORDEM_SLOTS,
   RARIDADE_INFO,
@@ -74,6 +75,8 @@ export class Hud {
     faseEl.title = `${l.nome} • ${state.nivel}/10${v > 1 ? ` • V${v}` : ''}`;
     el('vitorias').textContent = fmt(state.vitorias);
     el('derrotas').textContent = fmt(state.derrotas || 0);
+    el('conquistas-label').textContent =
+      `${fmt(state.conquistas.length)}/${fmt(ORDEM_CONQUISTAS.length)}`;
 
     const renascerLabel = el('renascer-label');
     renascerLabel.textContent =

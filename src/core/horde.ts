@@ -2,7 +2,7 @@
 // A simulação usa as MESMAS regras da animação (engine/arena.ts):
 // se mudar alcance/velocidade/regen aqui, mude lá também (ver REGRAS).
 
-import { LUGARES, MAX_LUGAR, NOMES_MONSTROS, REGRAS } from './data.js';
+import { ELITE, LUGARES, MAX_LUGAR, NOMES_MONSTROS, REGRAS } from './data.js';
 import { parametrosCombate } from './combat.js';
 import type {
   AvancoNivel,
@@ -59,17 +59,24 @@ export function gerarHorda(state: GameState): Horda {
     const total = totalInimigos(N);
     for (let i = 0; i < total; i++) {
       const varI = 1 + (i % 5) * 0.04;
-      const hp = Math.round(10 * Math.pow(1.15, N - 1) * Math.pow(1.9, L) * varI);
-      const atk = Math.round(2 * Math.pow(1.1, N - 1) * Math.pow(1.6, L) * varI);
+      const elite = N >= ELITE.nivelMinimo && i > 0 && i % ELITE.cada === ELITE.cada - 1;
+      const hp = Math.round(
+        10 * Math.pow(1.15, N - 1) * Math.pow(1.9, L) * varI * (elite ? ELITE.hpMult : 1),
+      );
+      const atk = Math.round(
+        2 * Math.pow(1.1, N - 1) * Math.pow(1.6, L) * varI * (elite ? ELITE.atkMult : 1),
+      );
       const kind = lugar.kinds[i % lugar.kinds.length];
+      const nome = NOMES_MONSTROS[kind % NOMES_MONSTROS.length];
       inimigos.push({
         kind,
-        nome: NOMES_MONSTROS[kind % NOMES_MONSTROS.length],
+        nome: elite ? `Elite ${nome}` : nome,
         hp,
         maxHp: hp,
         atk,
         boss: false,
-        gold: Math.round(goldBase * (0.9 + (i % 3) * 0.1)),
+        elite,
+        gold: Math.round(goldBase * (0.9 + (i % 3) * 0.1) * (elite ? ELITE.ouroMult : 1)),
       });
     }
   }
@@ -147,7 +154,7 @@ export function simularHorda(state: GameState): SimResult {
       if (d <= R.alcanceInimigo) {
         v.cd -= dt;
         if (v.cd <= 0) {
-          hp -= v.def.atk;
+          hp -= Math.max(1, Math.round(v.def.atk * (1 - P.reducaoDano)));
           v.cd = R.intervaloInimigo;
         }
       } else {

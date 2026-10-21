@@ -21,6 +21,7 @@ import {
   chanceDropNormal,
   custoUpgradeInventario,
   ehBoss,
+  listarConquistas,
   listarInventario,
   lugarDe,
   parametrosCombate,
@@ -141,7 +142,8 @@ export function skillsHtml(state: GameState): { titulo: string; html: string } {
   };
 }
 
-export function renascerHtml(state: GameState): { titulo: string; html: string } {  const ganho = brasoesDisponiveis(state);
+export function renascerHtml(state: GameState): { titulo: string; html: string } {
+  const ganho = brasoesDisponiveis(state);
   const b = bonusPrestigio(state);
   const pctStats = Math.round((b.stats - 1) * 100);
   const pctOuro = Math.round((b.ouro - 1) * 100);
@@ -169,6 +171,48 @@ export function renascerHtml(state: GameState): { titulo: string; html: string }
       }
     </div>
     <p class="hint" style="margin:10px 0 0">Cada brasão dá +${Math.round(PRESTIGIO.bonusStatsPorBrasao * 100)}% de ataque/vida e +${Math.round(PRESTIGIO.bonusOuroPorBrasao * 100)}% de ouro, para sempre.</p>
+  `,
+  };
+}
+
+export function conquistasHtml(state: GameState): { titulo: string; html: string } {
+  const lista = listarConquistas(state);
+  const feitas = lista.filter((c) => c.desbloqueada).length;
+  const est = state.estatisticas;
+  const lugarRecorde = lugarDe(est.maiorLugar);
+  const voltaRecorde = voltaDe(est.maiorLugar);
+  const linhas = lista
+    .map(({ def, progresso, desbloqueada }) => {
+      const atual = Math.min(progresso, def.meta);
+      const pct = def.meta > 0 ? Math.min(100, (atual / def.meta) * 100) : 100;
+      const premios: string[] = [];
+      if (def.ouro > 0) premios.push(`${ICONS.coin} ${fmt(def.ouro)}`);
+      if (def.brasoes > 0) premios.push(`👑 ${fmt(def.brasoes)}`);
+      return `
+      <div class="conquista ${desbloqueada ? 'feita' : ''}">
+        <div class="conquista-icone" aria-hidden="true">${desbloqueada ? '🏅' : '🔒'}</div>
+        <div class="conquista-info">
+          <div class="conquista-top">
+            <b>${def.nome}</b>
+            <span>${desbloqueada ? 'Concluída' : `${fmt(atual)}/${fmt(def.meta)}`}</span>
+          </div>
+          <div class="conquista-desc">${def.desc}</div>
+          <div class="conquista-track"><div class="conquista-fill" style="width:${pct.toFixed(1)}%"></div></div>
+          <div class="conquista-premio">Recompensa: ${premios.join(' + ') || 'registro eterno'}</div>
+        </div>
+      </div>`;
+    })
+    .join('');
+  return {
+    titulo: '🏅 Conquistas',
+    html: `
+    <p class="hint">${fmt(feitas)} de ${fmt(lista.length)} conquistas — recompensas pagas automaticamente.</p>
+    ${stat('Ouro acumulado', `${ICONS.coin} ${fmt(est.ouroTotal)}`)}
+    ${stat('Chefes derrotados', fmt(est.bossesDerrotados))}
+    ${stat('Elites derrotados', fmt(est.elitesDerrotados))}
+    ${stat('Itens encontrados', `${fmt(est.itensEncontrados)} • ${fmt(est.itensLendarios)} lendários`)}
+    ${stat('Maior progresso', `${lugarRecorde.nome}${voltaRecorde > 1 ? ` V${voltaRecorde}` : ''} • Nv.${est.maiorNivel}`)}
+    <div class="conquistas-lista">${linhas}</div>
   `,
   };
 }
@@ -321,6 +365,7 @@ export function ajudaHtml(): { titulo: string; html: string } {
     <div class="linha-stat"><span>Atalho</span><b>⚡ compra as melhorias mais baratas</b></div>
     <div class="linha-stat"><span>Renascimento</span><b>troca progresso por brasões permanentes</b></div>
     <div class="linha-stat"><span>Mochila</span><b>itens caem dos monstros e viram ouro</b></div>
+    <div class="linha-stat"><span>Conquistas</span><b>metas permanentes pagam ouro e brasões</b></div>
     <div class="linha-stat"><span>Drops</span><b>chance cresce com o nível; após 10 abates secos vem a garantia</b></div>
     <div class="linha-stat"><span>BOSS</span><b>sempre solta 3 itens, ao menos um raro</b></div>
     <div class="linha-stat"><span>Derrota</span><b>mantém o ouro e tenta de novo</b></div>

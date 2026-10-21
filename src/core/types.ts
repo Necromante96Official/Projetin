@@ -2,8 +2,24 @@
 // Lógica pura: nenhum acesso a DOM, canvas ou localStorage aqui.
 
 export type EquipSlot = 'elmo' | 'camisa' | 'calcas' | 'botas' | 'arma' | 'escudo';
-export type SkillId = 'afiado' | 'vigor' | 'regen' | 'rapidez' | 'saque';
-export type BiomaId = 'campo' | 'floresta' | 'caverna' | 'neve' | 'castelo';
+export type SkillId =
+  | 'afiado'
+  | 'vigor'
+  | 'regen'
+  | 'rapidez'
+  | 'saque'
+  | 'fortuna'
+  | 'tenacidade';
+export type BiomaId =
+  | 'campo'
+  | 'floresta'
+  | 'caverna'
+  | 'neve'
+  | 'castelo'
+  | 'ruinas'
+  | 'pantano'
+  | 'abismo'
+  | 'cidadela';
 export type Raridade = 'comum' | 'incomum' | 'raro' | 'ultra' | 'lendario';
 export type ItemTipo =
   | 'moeda'
@@ -17,7 +33,32 @@ export type ItemTipo =
   | 'broche'
   | 'cristal'
   | 'reliquia'
-  | 'gema';
+  | 'gema'
+  | 'escama'
+  | 'mapa'
+  | 'grimorio'
+  | 'trofeu';
+export type ConquistaId =
+  | 'primeira-vitoria'
+  | 'cacador'
+  | 'exterminador'
+  | 'primeiro-boss'
+  | 'explorador'
+  | 'conquistador'
+  | 'renascido'
+  | 'dinastia'
+  | 'ferreiro'
+  | 'arsenal'
+  | 'armadura-lendaria'
+  | 'aprendiz'
+  | 'erudito'
+  | 'colecionador'
+  | 'sortudo'
+  | 'cacador-elite'
+  | 'rico'
+  | 'magnata'
+  | 'teimoso'
+  | 'mochila-cheia';
 
 export interface EquipTier {
   nome: string;
@@ -52,6 +93,27 @@ export interface LugarDef {
   kinds: number[];
   bossKind: number;
   bossNome: string;
+}
+
+export interface ConquistaDef {
+  nome: string;
+  desc: string;
+  meta: number;
+  ouro: number;
+  brasoes: number;
+}
+
+export interface Estatisticas {
+  /** ouro ganho na vida, sem descontar gastos */
+  ouroTotal: number;
+  bossesDerrotados: number;
+  elitesDerrotados: number;
+  itensEncontrados: number;
+  itensLendarios: number;
+  /** maior índice de lugar já alcançado (0 = Campo Verde) */
+  maiorLugar: number;
+  /** maior nível de horda já alcançado (1..10) */
+  maiorNivel: number;
 }
 
 export interface RegrasCombate {
@@ -108,13 +170,15 @@ export interface GameState {
   /** quantas vezes o reino renasceu */
   renascimentos: number;
   inventario: Inventario;
+  estatisticas: Estatisticas;
+  conquistas: ConquistaId[];
   updatedAt: number;
 }
 
 /** Save cru vindo do localStorage: pode conter modelo antigo ou corrompido. */
 export type SaveCru = Omit<
   Partial<GameState>,
-  'cavaleiro' | 'equip' | 'skills' | 'inventario'
+  'cavaleiro' | 'equip' | 'skills' | 'inventario' | 'estatisticas' | 'conquistas'
 > & {
   nivelInimigo?: unknown;
   herois?: Array<{ nome?: unknown; atk?: unknown; hp?: unknown }>;
@@ -126,6 +190,8 @@ export type SaveCru = Omit<
   equip?: Partial<Record<EquipSlot, unknown>>;
   skills?: Partial<Record<SkillId, unknown>>;
   inventario?: unknown;
+  estatisticas?: unknown;
+  conquistas?: unknown;
   [extra: string]: unknown;
 };
 
@@ -138,6 +204,8 @@ export interface CombatParams {
   regen: number;
   /** multiplicador de ouro (skill saque) */
   ouroMult: number;
+  /** fração do dano recebido que é anulada (skill tenacidade) */
+  reducaoDano: number;
 }
 
 export interface Inimigo {
@@ -147,6 +215,8 @@ export interface Inimigo {
   maxHp: number;
   atk: number;
   boss: boolean;
+  /** inimigo raro da horda: mais forte e mais ouro */
+  elite?: boolean;
   gold: number;
 }
 

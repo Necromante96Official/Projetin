@@ -2,7 +2,7 @@
 // Sprites em render/sprites, cenário em engine/scenario, primitivas em render/pixel.
 // Nenhuma forma vetorial: só fillRect/fillText/strokeRect e transformações.
 
-import { REGRAS } from '../core/data.js';
+import { REGRAS, SKILL_MULT } from '../core/data.js';
 import type { BiomaId, Inimigo } from '../core/types.js';
 import type { EquipVisual } from '../render/sprites/shared.js';
 import { W, H, CHAO_Y, PX, R, elipsePixel, elipsePontos, type Ctx2D } from '../render/pixel.js';
@@ -20,11 +20,14 @@ import {
   type Particula,
 } from './scenario.js';
 
+export type ArenaSfx = 'golpe' | 'dano' | 'abate' | 'abateElite' | 'abateBoss';
+
 export interface ArenaFightConfig {
   playerAtk: number;
   playerHp: number;
   intervalo: number;
   regen: number;
+  reducaoDano: number;
   equip: EquipVisual;
   inimigos: Inimigo[];
   lugarAbs: number;
@@ -36,6 +39,7 @@ export interface ArenaFightConfig {
   onAbate?: (def: Inimigo) => void;
   onPlayerHp?: (hp: number, max: number) => void;
   onProgress?: (abatidos: number, total: number) => void;
+  onSfx?: (evento: ArenaSfx) => void;
 }
 
 export interface ArenaResult {
@@ -280,6 +284,7 @@ export class Arena {
     const T = TIPOS[v.def.kind % TIPOS.length];
     this.emitirFaiscas(v.x, 158, v.def.boss ? 26 : 12, [T.pele, '#fff3bf', '#e8b34a'], v.def.boss ? 150 : 95);
     this.fx.push({ tipo: 'morte', x: v.x, y: 160, idade: 0, cor: T.pele });
+    L.onSfx?.(v.def.boss ? 'abateBoss' : v.def.elite ? 'abateElite' : 'abate');
     L.onAbate?.(v.def);
     L.onProgress?.(L.abates, L.inimigos.length);
   }
@@ -332,7 +337,7 @@ export class Arena {
           flash: 0,
           morto: false,
           dieT: 0,
-          esc: def.boss ? 2.1 : 1,
+          esc: def.boss ? 2.1 : def.elite ? 1.3 : 1,
           atkA: null,
         });
         this.fx.push({ tipo: 'puff', x: PX + L.lado * REGRAS.distSpawn, y: CHAO_Y + 10, idade: 0 });
@@ -367,6 +372,7 @@ export class Arena {
           this.emitirFaiscas(alvo.x, CHAO_Y - 36, alvo.def.boss ? 14 : 8, ['#ffffff', '#ffd43b', '#fff3bf']);
           this.danos.push({ x: alvo.x, y: 132, txt: `-${L.playerAtk}`, c: '#ffd43b', idade: 0 });
           this.shake = Math.max(this.shake, alvo.def.boss ? 5 : 3);
+          L.onSfx?.('golpe');
           P.cd = L.intervalo || REGRAS.intervaloBase;
           if (alvo.hp <= 0) this.matar(alvo, L);
         }
@@ -385,13 +391,21 @@ export class Arena {
         if (d <= REGRAS.alcanceInimigo) {
           v.cd -= dt;
           if (v.cd <= 0) {
-            P.hp -= v.def.atk;
+            const dano = Math.max(
+              1,
+              Math.round(
+                v.def.atk *
+                  (1 - Math.min(SKILL_MULT.reducaoDanoMax, Math.max(0, L.reducaoDano))),
+              ),
+            );
+            P.hp -= dano;
             v.cd = REGRAS.intervaloInimigo;
             v.atkA = 0;
             this.cav.flash = 1;
             this.flashDano = 1;
             this.emitirFaiscas(PX - Math.sign(v.x - PX) * 12, CHAO_Y - 42, 7, ['#ff8787', '#ff6b6b', '#ffffff'], 75);
-            this.danos.push({ x: PX - 14, y: CHAO_Y - 58, txt: `-${v.def.atk}`, c: '#ff8787', idade: 0 });
+            this.danos.push({ x: PX - 14, y: CHAO_Y - 58, txt: `-${dano}`, c: '#ff8787', idade: 0 });
+            L.onSfx?.('dano');
             this.shake = Math.max(this.shake, 4);
             L.onPlayerHp?.(Math.max(0, Math.round(P.hp)), P.max);
           }
@@ -568,6 +582,13 @@ export class Arena {
           };
           pill(bx0 - 2, topo - 2, bw + 4, bh + 4, '#0d0a14');
           pill(bx0, topo - 1, bw, bh + 2, '#2a2338');
+          if (v.def.elite) {
+            const cx = Math.round(v.x);
+            R(ctx, cx - 5, topo - 13, 10, 2, '#e8b34a');
+            R(ctx, cx - 5, topo - 16, 2, 3, '#e8b34a');
+            R(ctx, cx - 1, topo - 18, 2, 5, '#fff3bf');
+            R(ctx, cx + 3, topo - 16, 2, 3, '#e8b34a');
+          }
           if (pct > 0.01) {
             const wf = Math.max(3, Math.round((bw - 2) * pct));
             pill(bx0 + 1, topo, wf, bh, corBarra);

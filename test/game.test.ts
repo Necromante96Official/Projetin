@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CONQUISTAS,
   EQUIPS,
   INVENTARIO,
   MAX_LUGAR,
   MAX_SKILL,
   MAX_TIER,
+  ORDEM_CONQUISTAS,
   ORDEM_SKILLS,
   ORDEM_SLOTS,
   ORDEM_TIPOS_ITEM,
@@ -27,7 +29,9 @@ import {
   custoProximaMelhoria,
   custoUpgradeInventario,
   definirAutoReciclar,
+  desbloquearConquistas,
   gerarHorda,
+  listarConquistas,
   listarInventario,
   lugarDe,
   melhorarInventario,
@@ -38,6 +42,7 @@ import {
   podeRenascer,
   poderCavaleiro,
   processarDrops,
+  progressoConquista,
   renascer,
   rolarDrops,
   sanitizarInventario,
@@ -102,7 +107,33 @@ describe('reino idle — equipamentos + skills', () => {
     const s = criarEstadoInicial();
     expect(gerarHorda(s).inimigos).toHaveLength(15);
     expect(gerarHorda({ ...s, nivel: 10 }).boss).toBe(true);
-    expect(lugarDe(2).nome).toBe('Campo Verde');
+    expect(lugarDe(2).nome).toBe('Caverna de Brasas');
+    expect(lugarDe(8).nome).toBe('Cidadela Celeste');
+    expect(lugarDe(9).nome).toBe('Campo Verde');
+  });
+
+  it('elites aparecem a cada 6 inimigos a partir do Nv.3', () => {
+    const s = criarEstadoInicial();
+    expect(gerarHorda({ ...s, nivel: 2 }).inimigos.some((e) => e.elite)).toBe(false);
+    const h = gerarHorda({ ...s, nivel: 3 });
+    const elites = h.inimigos.filter((e) => e.elite);
+    expect(elites).toHaveLength(Math.floor((h.inimigos.length - 1) / 6));
+    expect(elites[0].nome.startsWith('Elite ')).toBe(true);
+    expect(elites[0].hp).toBeGreaterThan(0);
+    expect(elites[0].gold).toBeGreaterThan(0);
+  });
+
+  it('fortuna e tenacidade alteram drop e defesa', () => {
+    const s = criarEstadoInicial();
+    const baseDrop = chanceDropNormal(s);
+    const baseDef = parametrosCombate(s).reducaoDano;
+    s.skills.fortuna = 2;
+    s.skills.tenacidade = 3;
+    expect(chanceDropNormal(s)).toBeGreaterThan(baseDrop);
+    expect(parametrosCombate(s).reducaoDano).toBeGreaterThan(baseDef);
+    expect(parametrosCombate(s).reducaoDano).toBeCloseTo(0.12);
+    expect(ORDEM_SKILLS).toContain('fortuna');
+    expect(ORDEM_SKILLS).toContain('tenacidade');
   });
 
   it('Nv.1 vencível; sim determinística', () => {
@@ -332,8 +363,8 @@ describe('reino idle — mochila e drops', () => {
     expect(boss).toBeCloseTo(100);
   });
 
-  it('catálogo tem 12 tipos, 5 nomes por raridade e ícone próprio', () => {
-    expect(ORDEM_TIPOS_ITEM).toHaveLength(12);
+  it('catálogo tem 16 tipos, 5 nomes por raridade e ícone próprio', () => {
+    expect(ORDEM_TIPOS_ITEM).toHaveLength(16);
     const nomes = new Set<string>();
     let pesoTotal = 0;
     for (const tipo of ORDEM_TIPOS_ITEM) {
@@ -617,5 +648,77 @@ describe('reino idle — mochila e drops', () => {
     expect(s.inventario.autoReciclar).toBe('lendario');
     expect(definirAutoReciclar(s, null)).toBe(true);
     expect(s.inventario.autoReciclar).toBeNull();
+  });
+});
+
+describe('reino idle — conquistas', () => {
+  it('começa sem conquistas e com estatísticas zeradas', () => {
+    const s = criarEstadoInicial();
+    expect(s.conquistas).toEqual([]);
+    expect(s.estatisticas.ouroTotal).toBe(0);
+    expect(s.estatisticas.itensLendarios).toBe(0);
+    expect(ORDEM_CONQUISTAS).toHaveLength(20);
+    expect(Object.keys(CONQUISTAS)).toHaveLength(ORDEM_CONQUISTAS.length);
+  });
+
+  it('desbloqueia, paga recompensa e não repete', () => {
+    const s = criarEstadoInicial();
+    s.vitorias = 1;
+    const ouroAntes = s.ouro;
+    const novas = desbloquearConquistas(s);
+    expect(novas.map((c) => c.id)).toContain('primeira-vitoria');
+    expect(s.conquistas).toContain('primeira-vitoria');
+    expect(s.ouro).toBe(ouroAntes + CONQUISTAS['primeira-vitoria'].ouro);
+    expect(desbloquearConquistas(s)).toEqual([]);
+    expect(s.ouro).toBe(ouroAntes + CONQUISTAS['primeira-vitoria'].ouro);
+  });
+
+  it('progresso usa estatísticas permanentes e skills mínimas', () => {
+    const s = criarEstadoInicial();
+    s.estatisticas.maiorLugar = 9;
+    s.estatisticas.maiorNivel = 10;
+    s.estatisticas.ouroTotal = 10000;
+    s.estatisticas.itensLendarios = 1;
+    for (const id of ORDEM_SKILLS) s.skills[id] = 2;
+    s.skills.afiado = 3;
+    expect(progressoConquista(s, 'conquistador')).toBe(9);
+    expect(progressoConquista(s, 'rico')).toBe(10000);
+    expect(progressoConquista(s, 'sortudo')).toBe(1);
+    expect(progressoConquista(s, 'erudito')).toBe(2);
+    const lista = listarConquistas(s);
+    expect(lista.find((c) => c.id === 'aprendiz')?.desbloqueada).toBe(false);
+    const novas = desbloquearConquistas(s);
+    expect(novas.map((c) => c.id)).toContain('conquistador');
+    expect(novas.map((c) => c.id)).toContain('rico');
+    expect(novas.map((c) => c.id)).toContain('sortudo');
+    expect(novas.map((c) => c.id)).not.toContain('erudito');
+    expect(s.brasoes).toBe(CONQUISTAS.conquistador.brasoes);
+  });
+
+  it('migra estatísticas antigas e filtra conquistas inválidas', () => {
+    const s = migrarSave({
+      ouro: 1200,
+      lugar: 4,
+      nivel: 7,
+      vitorias: 2,
+      abates: 40,
+      conquistas: ['primeira-vitoria', 'primeira-vitoria', 'inexistente'],
+      estatisticas: { ouroTotal: -50, maiorNivel: 99, itensLendarios: 2 },
+      inventario: {
+        itens: [
+          { nome: 'Relíquia', raridade: 'lendario', valor: 100 },
+          { nome: 'Moeda', raridade: 'comum', valor: 5 },
+        ],
+        reciclados: 3,
+      },
+    });
+    expect(s.conquistas).toEqual(['primeira-vitoria']);
+    expect(s.estatisticas.maiorLugar).toBe(4);
+    expect(s.estatisticas.maiorNivel).toBe(10);
+    expect(s.estatisticas.bossesDerrotados).toBeGreaterThanOrEqual(4);
+    expect(s.estatisticas.ouroTotal).toBeGreaterThanOrEqual(1200);
+    expect(s.estatisticas.itensEncontrados).toBe(5);
+    expect(s.estatisticas.itensLendarios).toBe(2);
+    expect(desbloquearConquistas(s).map((c) => c.id)).toContain('explorador');
   });
 });

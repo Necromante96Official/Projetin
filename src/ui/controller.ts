@@ -10,6 +10,7 @@ import {
   comprarSkill,
   criarEstadoInicial,
   definirAutoReciclar,
+  desbloquearConquistas,
   indiceRaridade,
   limiteSimultaneos,
   lugarDe,
@@ -35,16 +36,24 @@ import {
   type Raridade,
   type SkillId,
 } from '../core/index.js';
+import { Sfx } from '../audio/sfx.js';
 import { Arena, type ArenaResult } from '../engine/arena.js';
 import { hidratarIcones, iconeItem } from '../render/icons.js';
 import { el, fmt, formatTempo } from './dom.js';
 import { Hud } from './hud.js';
 import { LogStore } from './log.js';
 import { ModalManager } from './modal.js';
-import { apagarSave, carregar, salvar } from './storage.js';
+import {
+  apagarSave,
+  carregar,
+  carregarMudo,
+  salvar,
+  salvarMudo,
+} from './storage.js';
 import {
   ajudaHtml,
   cavaleiroHtml,
+  conquistasHtml,
   cronicasHtml,
   equipamentosHtml,
   lugarHtml,
@@ -61,6 +70,17 @@ export class GameController {
   private modal = new ModalManager();
   private logs: LogStore;
   private hud = new Hud();
+  private readonly sfx = new Sfx(carregarMudo());
+  private readonly aoPrimeiroGesto = (): void => this.sfx.desbloquear();
+  private readonly aoClicarSom = (e: MouseEvent): void => {
+    const alvo = e.target instanceof Element ? e.target.closest('button') : null;
+    if (alvo) this.sfx.tocar('click');
+  };
+  private readonly aoMudarSom = (e: Event): void => {
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) {
+      this.sfx.tocar('click');
+    }
+  };
   private tempoRestante = DESCANSO_MS / 1000;
   private filtroMochila: Raridade | null = null;
   private ordemMochila: OrdemInventario = 'recente';
@@ -79,6 +99,8 @@ export class GameController {
     this.logs = new LogStore(this.modal);
     this.logs.onCronicasAberta = () => this.abrirCronicas();
     this.arena = new Arena(canvas);
+    this.modal.onAbrir = () => this.sfx.tocar('modalAbrir');
+    this.modal.onFechar = () => this.sfx.tocar('modalFechar');
   }
 
   // ---------- modais ----------
@@ -103,8 +125,11 @@ export class GameController {
       (btn as HTMLElement).onclick = () => {
         const slot = (btn as HTMLElement).dataset.eq as EquipSlot;
         if (comprarEquip(this.state, slot)) {
+          this.sfx.tocar('compra');
           this.logs.log(`🛒 Comprou: ${EQUIPS[slot].nome}.`, 'buy');
           this.persistirERender();
+        } else {
+          this.sfx.tocar('erro');
         }
       };
     });
@@ -118,8 +143,11 @@ export class GameController {
       (btn as HTMLElement).onclick = () => {
         const id = (btn as HTMLElement).dataset.sk as SkillId;
         if (comprarSkill(this.state, id)) {
+          this.sfx.tocar('skill');
           this.logs.log(`🛒 Skill: ${SKILLS[id].nome} Nv.${this.state.skills[id]}.`, 'buy');
           this.persistirERender();
+        } else {
+          this.sfx.tocar('erro');
         }
       };
     });
@@ -132,6 +160,12 @@ export class GameController {
     this.modal.corpo.querySelectorAll('[data-renascer]').forEach((btn) => {
       (btn as HTMLElement).onclick = () => this.executarRenascimento();
     });
+  }
+
+  private renderConquistas(abrir: boolean): void {
+    const { titulo, html } = conquistasHtml(this.state);
+    if (abrir) this.modal.abrir(titulo, html, 'conquistas');
+    else this.modal.atualizar(titulo, html, 'conquistas');
   }
 
   private renderMochila(abrir: boolean): void {
@@ -147,11 +181,14 @@ export class GameController {
     if (upgrade) {
       upgrade.onclick = () => {
         if (melhorarInventario(this.state)) {
+          this.sfx.tocar('compra');
           this.logs.log(
             `🎒 Mochila ampliada para ${this.state.inventario.capacidade} espaços.`,
             'buy',
           );
           this.persistirERender();
+        } else {
+          this.sfx.tocar('erro');
         }
       };
     }
@@ -195,11 +232,15 @@ export class GameController {
         if (!item) return;
         const valor = venderItem(this.state, i);
         if (valor != null) {
+          this.registrarOuroTotal(valor);
+          this.sfx.tocar('vender');
           this.logs.log(
             `💰 Vendeu ${item.nome} (${RARIDADE_INFO[item.raridade].nome}) por ${fmt(valor)} ouro.`,
             'buy',
           );
           this.persistirERender();
+        } else {
+          this.sfx.tocar('erro');
         }
       };
     });
@@ -209,11 +250,15 @@ export class GameController {
       todos.onclick = () => {
         const vendidos = venderTodosItens(this.state);
         if (vendidos.itens > 0) {
+          this.registrarOuroTotal(vendidos.ouro);
+          this.sfx.tocar('vender');
           this.logs.log(
             `💰 Vendeu ${vendidos.itens} ${vendidos.itens > 1 ? 'itens' : 'item'} por ${fmt(vendidos.ouro)} ouro.`,
             'buy',
           );
           this.persistirERender();
+        } else {
+          this.sfx.tocar('erro');
         }
       };
     }
@@ -224,12 +269,16 @@ export class GameController {
       porFiltro.onclick = () => {
         const vendidos = venderItensPorRaridade(this.state, raridade);
         if (vendidos.itens > 0) {
+          this.registrarOuroTotal(vendidos.ouro);
+          this.sfx.tocar('vender');
           const quantidade = `${vendidos.itens} ${vendidos.itens > 1 ? 'itens' : 'item'}`;
           this.logs.log(
             `💰 Vendeu ${quantidade} de raridade ${RARIDADE_INFO[raridade].nome.toLowerCase()} por ${fmt(vendidos.ouro)} ouro.`,
             'buy',
           );
           this.persistirERender();
+        } else {
+          this.sfx.tocar('erro');
         }
       };
     }
@@ -259,6 +308,11 @@ export class GameController {
     this.renderMochila(true);
   }
 
+  abrirConquistas(): void {
+    this.checarConquistas();
+    this.renderConquistas(true);
+  }
+
   abrirCronicas(): void {
     const { titulo, html } = cronicasHtml();
     if (this.modal.chave === 'cronicas') this.modal.atualizar(titulo, html, 'cronicas');
@@ -272,20 +326,23 @@ export class GameController {
   }
 
   private executarRenascimento(): void {
+    this.registrarProgresso();
     const resultado = renascer(this.state);
     if (!resultado.possivel) {
+      this.sfx.tocar('erro');
       this.logs.log(
         `👑 Renascer libera após vencer o boss do ${lugarDe(0).nome}. Continue avançando!`,
         'info',
       );
       return;
     }
+    this.sfx.tocar('prestigio');
     this.runSeq++;
-        this.emBatalha = false;
-        this.hpAtual = null;
-        this.filtroMochila = null;
-        this.ordemMochila = 'recente';
-        this.tempoRestante = DESCANSO_MS / 1000;
+    this.emBatalha = false;
+    this.hpAtual = null;
+    this.filtroMochila = null;
+    this.ordemMochila = 'recente';
+    this.tempoRestante = DESCANSO_MS / 1000;
     this.resetarBatalhaVisual();
     this.modal.fechar();
     this.logs.flash(`👑 Renascimento! +${fmt(resultado.ganhos)} brasões`, true);
@@ -293,6 +350,7 @@ export class GameController {
       `👑 O reino renasceu pela ${this.state.renascimentos}ª vez: +${fmt(resultado.ganhos)} brasões (total ${fmt(resultado.total)}).`,
       'info',
     );
+    this.checarConquistas();
     salvar(this.state);
     this.descansoAtual();
     this.render();
@@ -301,9 +359,11 @@ export class GameController {
   private comprarAcessivel(): void {
     const resultado = comprarMelhoriasAcessiveis(this.state);
     if (resultado.compras <= 0) {
+      this.sfx.tocar('erro');
       this.logs.log('⚡ Nenhuma melhoria acessível com o ouro atual.', 'info');
       return;
     }
+    this.sfx.tocar('compra');
     this.logs.log(
       `⚡ Comprou ${resultado.compras} melhoria${resultado.compras > 1 ? 's' : ''} por ${fmt(resultado.gasto)} ouro.`,
       'buy',
@@ -314,6 +374,7 @@ export class GameController {
   // ---------- render ----------
 
   private persistirERender(): void {
+    this.checarConquistas();
     salvar(this.state);
     this.render();
   }
@@ -327,6 +388,7 @@ export class GameController {
     else if (chave === 'skills') this.renderSkills(false);
     else if (chave === 'renascer') this.renderRenascer(false);
     else if (chave === 'mochila') this.renderMochila(false);
+    else if (chave === 'conquistas') this.renderConquistas(false);
   }
 
   /** Mantém barra e número de HP coerentes durante a luta (dano + regeneração). */
@@ -342,11 +404,52 @@ export class GameController {
   private descansoAtual(): void {
     const l = lugarDe(this.state.lugar);
     this.arena.descanso(this.state.lugar, l.bioma, this.state.equip, this.state.nivel);
+    this.sfx.ambiente(l.bioma);
+  }
+
+  private registrarOuroTotal(valor: number): void {
+    if (!Number.isFinite(valor) || valor <= 0) return;
+    const est = this.state.estatisticas;
+    est.ouroTotal = Math.min(
+      Number.MAX_SAFE_INTEGER,
+      Math.max(0, est.ouroTotal) + valor,
+    );
   }
 
   private ganharOuro(valor: number): void {
     if (!Number.isFinite(valor) || valor <= 0) return;
     this.state.ouro = Math.min(Number.MAX_SAFE_INTEGER, this.state.ouro + valor);
+    this.registrarOuroTotal(valor);
+  }
+
+  private registrarProgresso(): void {
+    const est = this.state.estatisticas;
+    est.maiorLugar = Math.max(est.maiorLugar, this.state.lugar);
+    est.maiorNivel = Math.max(est.maiorNivel, this.state.nivel);
+  }
+
+  private checarConquistas(): void {
+    this.registrarProgresso();
+    const novas = desbloquearConquistas(this.state);
+    if (novas.length === 0) return;
+    this.sfx.tocar('conquista');
+    for (const { def } of novas) {
+      const premios: string[] = [];
+      if (def.ouro > 0) premios.push(`${fmt(def.ouro)} ouro`);
+      if (def.brasoes > 0) {
+        premios.push(`${fmt(def.brasoes)} ${def.brasoes > 1 ? 'brasões' : 'brasão'}`);
+      }
+      this.logs.log(
+        `🏅 ${def.nome}: ${def.desc}${premios.length > 0 ? ` — +${premios.join(' + ')}` : ''}.`,
+        'buy',
+      );
+    }
+    this.logs.flash(
+      novas.length > 1
+        ? `🏅 ${novas.length} conquistas desbloqueadas!`
+        : `🏅 ${novas[novas.length - 1].def.nome}`,
+      true,
+    );
   }
 
   // ---------- batalha ----------
@@ -356,6 +459,7 @@ export class GameController {
     fill.classList.add('batalha');
     fill.style.width = '100%';
     el('timer').textContent = boss ? '☠ boss em andamento...' : '⚔ horda em andamento...';
+    if (boss) this.sfx.tocar('boss');
   }
 
   private resetarBatalhaVisual(): void {
@@ -380,6 +484,7 @@ export class GameController {
       const P = parametrosCombate(this.state);
       const l = lugarDe(this.state.lugar);
       const tempoMax = Math.max(180, sim.tempo * 2 + 60);
+      this.registrarProgresso();
 
       this.atualizarVida(P.hp, P.hp);
       (el('horda-fill') as HTMLElement).style.width = '0%';
@@ -392,6 +497,7 @@ export class GameController {
           playerHp: P.hp,
           intervalo: P.intervalo,
           regen: P.regen,
+          reducaoDano: P.reducaoDano,
           equip: { ...this.state.equip },
           inimigos: horda.inimigos,
           lugarAbs: this.state.lugar,
@@ -404,9 +510,16 @@ export class GameController {
             if (!ativo()) return;
             this.ganharOuro(def.gold);
             this.state.abates += 1;
+            const est = this.state.estatisticas;
+            if (def.elite) est.elitesDerrotados += 1;
+            if (def.boss) est.bossesDerrotados += 1;
             const itens = rolarDrops(this.state, { boss: def.boss });
             if (itens.length > 0) {
+              est.itensEncontrados += itens.length;
+              est.itensLendarios += itens.filter((item) => item.raridade === 'lendario').length;
+              this.sfx.tocar('drop');
               const resumo = processarDrops(this.state, itens);
+              this.registrarOuroTotal(resumo.ouro);
               lootItens += resumo.obtidos.length;
               lootReciclados += resumo.reciclados;
               lootOuro += resumo.ouro;
@@ -422,6 +535,14 @@ export class GameController {
               }
             }
             el('ouro').textContent = fmt(this.state.ouro);
+          },
+          onSfx: (evento) => {
+            if (!ativo()) return;
+            if (evento === 'golpe') this.sfx.tocar('golpe');
+            else if (evento === 'dano') this.sfx.tocar('dano');
+            else if (evento === 'abate') this.sfx.tocar('abate');
+            else if (evento === 'abateElite') this.sfx.tocar('elite');
+            else this.sfx.tocar('boss');
           },
           onPlayerHp: (hp, max) => {
             if (!ativo()) return;
@@ -466,6 +587,7 @@ export class GameController {
       }
 
       if (res.venceu) {
+        this.sfx.tocar('vitoria');
         this.ganharOuro(horda.bonus);
         this.state.vitorias += 1;
         this.logs.flash(`✅ Nível limpo! +${fmt(res.ouro + horda.bonus)} ouro`, true);
@@ -482,6 +604,7 @@ export class GameController {
         }
         const av = avancarNivel(this.state);
         if (av.subiuLugar) {
+          this.sfx.tocar('lugar');
           const nl = lugarDe(this.state.lugar);
           this.logs.log(
             `🌍 Novo lugar: ${nl.nome}${av.volta > 1 ? ` — VOLTA ${av.volta}!` : '!'} O boss caiu!`,
@@ -489,6 +612,7 @@ export class GameController {
           );
         }
       } else {
+        this.sfx.tocar('derrota');
         this.state.derrotas += 1;
         this.logs.flash(`❌ Derrota... manteve ${fmt(res.ouro)} ouro`, false);
         this.logs.log(
@@ -498,6 +622,14 @@ export class GameController {
       }
 
       const melhorLoot = lootMelhor.item;
+      if (melhorLoot && indiceRaridade(melhorLoot.raridade) >= indiceRaridade('lendario')) {
+        this.sfx.tocar('lendario');
+      } else if (
+        melhorLoot &&
+        indiceRaridade(melhorLoot.raridade) >= indiceRaridade('raro')
+      ) {
+        this.sfx.tocar('raro');
+      }
       const lootNotavel =
         horda.boss ||
         (melhorLoot != null &&
@@ -532,6 +664,7 @@ export class GameController {
         this.hpAtual = null;
         this.tempoRestante = DESCANSO_MS / 1000;
         this.resetarBatalhaVisual();
+        this.checarConquistas();
         salvar(this.state);
         this.descansoAtual();
         this.render();
@@ -541,9 +674,21 @@ export class GameController {
 
   // ---------- boot ----------
 
+  private atualizarBotaoSom(): void {
+    const btn = el('btn-som');
+    const mudo = this.sfx.silenciado;
+    btn.textContent = mudo ? '🔇 Som' : '🔊 Som';
+    btn.setAttribute('aria-pressed', String(mudo));
+    btn.title = mudo ? 'Ativar som' : 'Desativar som';
+    btn.classList.toggle('mudo', mudo);
+  }
+
   boot(): void {
     window.addEventListener('pagehide', this.aoSair);
     document.addEventListener('visibilitychange', this.aoEsconder);
+    document.addEventListener('pointerdown', this.aoPrimeiroGesto, { passive: true });
+    document.addEventListener('click', this.aoClicarSom);
+    document.addEventListener('change', this.aoMudarSom);
 
     el('lutar-agora').onclick = () => {
       if (this.emBatalha) return;
@@ -582,10 +727,17 @@ export class GameController {
     el('btn-equip').onclick = () => this.abrirEquipamentos();
     el('btn-skills').onclick = () => this.abrirSkills();
     el('btn-mochila').onclick = () => this.abrirMochila();
+    el('btn-conquistas').onclick = () => this.abrirConquistas();
     el('btn-renascer').onclick = () => this.abrirRenascer();
     el('btn-auto-comprar').onclick = () => this.comprarAcessivel();
     el('btn-cronicas').onclick = () => this.abrirCronicas();
     el('btn-ajuda').onclick = () => this.abrirAjuda();
+    el('btn-som').onclick = () => {
+      this.sfx.desbloquear();
+      salvarMudo(this.sfx.alternarMudo());
+      this.atualizarBotaoSom();
+    };
+    this.atualizarBotaoSom();
 
     // descanso entre hordas (hora de investir) — a luta pausa o relógio
     this.autoTimer = window.setInterval(() => {
@@ -609,6 +761,7 @@ export class GameController {
     this.rendaTimer = window.setInterval(() => {
       const renda = Math.max(1, Math.round(ouroPorMinuto(this.state) / 12));
       this.ganharOuro(renda);
+      this.checarConquistas();
       salvar(this.state);
       this.render();
     }, 5000);
@@ -624,6 +777,7 @@ export class GameController {
       salvar(this.state);
     }
 
+    this.checarConquistas();
     hidratarIcones();
     this.logs.log(
       `👋 Bem-vindo! ${this.state.cavaleiro.nome} começa de farrapos — equipe e vença as hordas.`,
@@ -637,6 +791,10 @@ export class GameController {
   destroy(): void {
     window.removeEventListener('pagehide', this.aoSair);
     document.removeEventListener('visibilitychange', this.aoEsconder);
+    document.removeEventListener('pointerdown', this.aoPrimeiroGesto);
+    document.removeEventListener('click', this.aoClicarSom);
+    document.removeEventListener('change', this.aoMudarSom);
+    this.sfx.pararAmbiente();
     window.clearInterval(this.autoTimer);
     window.clearInterval(this.rendaTimer);
   }

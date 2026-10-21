@@ -29,6 +29,10 @@ export const ICONS = {
   cristal: `<svg class="ic ic-item" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.2 1.8 L9.8 2.4 L10.7 8.2 L8.2 14 L5.3 8.6 Z" fill="#74c0fc" stroke="#3a5a8c" stroke-width="0.8"/><path d="M6.2 1.8 L8.2 8.6 L9.8 2.4 M5.3 8.6 L8.2 8.6 L10.7 8.2" fill="none" stroke="#d9efff" stroke-width="0.6"/><path d="M11.5 3.5 L13.8 4.5 L14 8 L11.8 10 Z" fill="#b197fc" stroke="#5f3dc4" stroke-width="0.6"/></svg>`,
   reliquia: `<svg class="ic ic-item" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2 H12 V3.2 C12 6 10.4 7.8 8 7.8 C5.6 7.8 4 6 4 3.2 Z" fill="#e8b34a" stroke="#8a6414" stroke-width="0.9"/><path d="M7.2 7.8 H8.8 V12 H10.8 V14 H5.2 V12 H7.2 Z" fill="#c9a25e" stroke="#8a6414" stroke-width="0.8"/><circle cx="8" cy="4.8" r="1.2" fill="#ff6b7a"/><path d="M3 2 H13" stroke="#f8dc96" stroke-width="0.9" stroke-linecap="round"/></svg>`,
   gema: `<svg class="ic ic-item" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 2 H11 L14 6 L8 14 L2 6 Z" fill="#63d68a" stroke="#2f8f4a" stroke-width="0.9"/><path d="M5 2 L8 6 L11 2 M2 6 H14 M8 6 L8 14" fill="none" stroke="#b2f2bb" stroke-width="0.7"/><path d="M5 2 L4.2 6 H2 M11 2 L11.8 6 H14" fill="none" stroke="#2f8f4a" stroke-width="0.6"/></svg>`,
+  escama: `<svg class="ic ic-item" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.8 C12 3.5 14 6.2 13.4 10.2 C12.8 13.4 10.4 14.4 8 14.2 C5.6 14.4 3.2 13.4 2.6 10.2 C2 6.2 4 3.5 8 1.8 Z" fill="#63d68a" stroke="#2f8f4a" stroke-width="0.9"/><path d="M8 3.2 C10.2 5.4 10.6 8.8 9.2 12.8 M8 3.2 C5.8 5.4 5.4 8.8 6.8 12.8" fill="none" stroke="#b2f2bb" stroke-width="0.7"/><path d="M4.4 6.8 C6.2 6.2 9.8 6.2 11.6 6.8" fill="none" stroke="#2f8f4a" stroke-width="0.6" opacity="0.7"/></svg>`,
+  mapa: `<svg class="ic ic-item" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 3.5 L5.6 2.2 L10.4 3.8 L14 2.5 V12.5 L10.4 13.8 L5.6 12.2 L2 13.5 Z" fill="#d9c9a3" stroke="#6b4a2f" stroke-width="0.9"/><path d="M5.6 2.2 V12.2 M10.4 3.8 V13.8" stroke="#8a7a5c" stroke-width="0.7"/><path d="M7 6.4 L9 8.6 M9.2 6.2 L7.2 9" stroke="#c2255c" stroke-width="1.2" stroke-linecap="round"/><circle cx="11.8" cy="10.5" r="0.8" fill="#e8b34a"/></svg>`,
+  grimorio: `<svg class="ic ic-item" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2.5 C5 1.6 7 1.8 8 2.6 C9 1.8 11 1.6 13 2.5 V13.2 C11 12.4 9 12.5 8 13.4 C7 12.5 5 12.4 3 13.2 Z" fill="#7048e8" stroke="#3b2a5a" stroke-width="1"/><path d="M8 2.6 V13.4" stroke="#d0bfff" stroke-width="0.8"/><path d="M4.6 5.2 H6.6 M4.6 7.2 H6.6 M9.6 5.2 H11.6 M9.6 7.2 H11.6" stroke="#d0bfff" stroke-width="0.7" stroke-linecap="round"/><path d="M6.4 10 L8 8.6 L9.6 10 L8 11.4 Z" fill="#e8b34a" stroke="#8a6414" stroke-width="0.6"/></svg>`,
+  trofeu: `<svg class="ic ic-item" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2 H12 V5.5 C12 8.2 10.4 9.6 8 9.6 C5.6 9.6 4 8.2 4 5.5 Z" fill="#e8b34a" stroke="#8a6414" stroke-width="0.9"/><path d="M4 3 H2.2 C2.2 5.6 3.2 7 5 7.2 M12 3 H13.8 C13.8 5.6 12.8 7 11 7.2" fill="none" stroke="#c9a25e" stroke-width="0.9" stroke-linecap="round"/><path d="M7.2 9.6 H8.8 V12 H10.8 V14 H5.2 V12 H7.2 Z" fill="#c9a25e" stroke="#8a6414" stroke-width="0.8"/><path d="M6.2 12 H9.8" stroke="#8a6414" stroke-width="0.8"/><path d="M8 3.4 L8.7 4.8 L10.2 5 L9.1 6.1 L9.4 7.6 L8 6.9 L6.6 7.6 L6.9 6.1 L5.8 5 L7.3 4.8 Z" fill="#fff3bf"/></svg>`,
 } as const;
 
 export const ICONES_ITENS: Readonly<Record<ItemTipo, string>> = {
@@ -44,6 +48,10 @@ export const ICONES_ITENS: Readonly<Record<ItemTipo, string>> = {
   cristal: ICONS.cristal,
   reliquia: ICONS.reliquia,
   gema: ICONS.gema,
+  escama: ICONS.escama,
+  mapa: ICONS.mapa,
+  grimorio: ICONS.grimorio,
+  trofeu: ICONS.trofeu,
 };
 
 export function iconeItem(tipo: ItemTipo): string {

@@ -11,6 +11,7 @@ export type ModalKey =
   | 'skills'
   | 'renascer'
   | 'mochila'
+  | 'conquistas'
   | 'cronicas'
   | 'ajuda'
   | null;
@@ -32,6 +33,8 @@ export class ModalManager {
   private backdropEl: HTMLElement;
   private painelEl: HTMLElement;
   private focoAnterior: HTMLElement | null = null;
+  onAbrir?: () => void;
+  onFechar?: () => void;
 
   constructor() {
     this.tituloEl = el('modal-titulo');
@@ -82,6 +85,7 @@ export class ModalManager {
     this.atualizar(titulo, html, chave);
     this.backdropEl.classList.remove('hidden');
     this.painelEl.focus();
+    this.onAbrir?.();
   }
 
   /** Atualiza o conteúdo sem fechar/reabrir (preserva rolagem e foco do modal). */
@@ -102,6 +106,7 @@ export class ModalManager {
     const foco = this.focoAnterior;
     this.focoAnterior = null;
     if (foco?.isConnected) foco.focus();
+    this.onFechar?.();
   }
 
   get chave(): ModalKey {
